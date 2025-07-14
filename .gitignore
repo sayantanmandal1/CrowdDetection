@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Virtual environments
+venv/
+ENV/
+.env/
+.venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Model weights and large files
+backend/yolov5s.pt
+*.h5
+*.pt
+*.pth
+*.ckpt
+
+# Uploaded files
+backend/uploads/
+
+# Node.js
+node_modules/
+frontend/node_modules/
+
+# Build output
+frontend/build/
+frontend/dist/
+
+# Log files
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Package locks
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Misc
+*.swp
+*.swo
+
+# Ignore test coverage
+coverage/
+
+# Ignore compiled shared objects
+*.so
+
+# Ignore frontend cache
+frontend/.cache/
+backend/**/.env
+# Backend cache
+backend/**/__pycache__/
+backend/api/**/__pycache__/
+backend/services/**/__pycache__/

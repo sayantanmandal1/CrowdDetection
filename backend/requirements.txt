@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+pydantic
+python-multipart
+pillow
+opencv-python
+numpy
+scikit-learn
+prophet
+torch
+geopandas
+networkx 
+ultralytics
+seaborn
