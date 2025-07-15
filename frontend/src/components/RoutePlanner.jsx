@@ -48,17 +48,17 @@ function RoutePlanner({ onRouteFound }) {
       <h3>🧭 Route Planner</h3>
       <div>
         <label>Start: </label>
-        <select value={start} onChange={e => setStart(e.target.value)}>
+        <select value={start} onChange={e => setStart(e.target.value)} style={{maxWidth: '100%'}}>
           {locations.map(loc => (
-            <option key={loc.name} value={loc.name}>{loc.name} ({loc.category})</option>
+            <option key={loc.name || loc.lat+','+loc.lon} value={loc.name || `${loc.lat},${loc.lon}`}>{loc.name || 'Unknown Location'} ({loc.category || 'Type Unknown'})</option>
           ))}
         </select>
       </div>
       <div>
         <label>End: </label>
-        <select value={end} onChange={e => setEnd(e.target.value)}>
+        <select value={end} onChange={e => setEnd(e.target.value)} style={{maxWidth: '100%'}}>
           {locations.map(loc => (
-            <option key={loc.name} value={loc.name}>{loc.name} ({loc.category})</option>
+            <option key={loc.name || loc.lat+','+loc.lon} value={loc.name || `${loc.lat},${loc.lon}`}>{loc.name || 'Unknown Location'} ({loc.category || 'Type Unknown'})</option>
           ))}
         </select>
       </div>
