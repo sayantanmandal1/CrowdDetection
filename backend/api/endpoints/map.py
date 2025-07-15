@@ -1,50 +1,98 @@
-from fastapi import APIRouter
-from services.map_service import get_geojson_map, get_public_transport, get_shuttles, get_live_vehicles, get_accessible_facilities, load_osm_pois
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy.orm import Session
+from typing import List, Optional
+from models.poi import POI
+from services.map_service import SessionLocal, load_osm_pois
+from pydantic import BaseModel
 
 router = APIRouter()
 
-@router.get("/geojson/")
-async def fetch_geojson():
-    """
-    Return simplified GeoJSON map features with zones and overlays
-    """
-    geojson_data = get_geojson_map()
-    return JSONResponse(content=geojson_data)
+# --- Pydantic Schemas ---
+class POISchema(BaseModel):
+    id: int
+    name: str
+    type: Optional[str]
+    lat: float
+    lon: float
+    accessibility: Optional[str]
+    extra: Optional[dict]
+    class Config:
+        orm_mode = True
 
-@router.get("/public-transport/")
-async def fetch_public_transport():
-    """
-    Return GeoJSON for public transport stops (bus, train, etc.)
-    """
-    data = get_public_transport()
-    return JSONResponse(content=data)
+# --- Dependency ---
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-@router.get("/shuttles/")
-async def fetch_shuttles():
-    """
-    Return GeoJSON for shuttle routes
-    """
-    data = get_shuttles()
-    return JSONResponse(content=data)
+# --- Endpoints ---
+@router.get("/pois", response_model=List[POISchema])
+def list_pois(
+    type: Optional[str] = Query(None),
+    name: Optional[str] = Query(None),
+    lat: Optional[float] = Query(None),
+    lon: Optional[float] = Query(None),
+    radius: Optional[float] = Query(None, description="Radius in meters for proximity search"),
+    bbox: Optional[str] = Query(None, description="Bounding box: minlat,minlon,maxlat,maxlon"),
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+):
+    query = db.query(POI)
+    if type:
+        query = query.filter(POI.type == type)
+    if name:
+        query = query.filter(POI.name.ilike(f"%{name}%"))
+    if bbox:
+        try:
+            minlat, minlon, maxlat, maxlon = map(float, bbox.split(","))
+            query = query.filter(POI.lat >= minlat, POI.lat <= maxlat, POI.lon >= minlon, POI.lon <= maxlon)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid bbox format")
+    if lat is not None and lon is not None and radius:
+        # Simple haversine filter (not as fast as PostGIS/Redis, but works for now)
+        from math import radians, cos, sin, asin, sqrt
+        def haversine(lat1, lon1, lat2, lon2):
+            R = 6371000  # meters
+            dlat = radians(lat2 - lat1)
+            dlon = radians(lon2 - lon1)
+            a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+            c = 2 * asin(sqrt(a))
+            return R * c
+        pois = query.all()
+        pois = [p for p in pois if haversine(lat, lon, p.lat, p.lon) <= radius]
+        return pois[skip:skip+limit]
+    return query.offset(skip).limit(limit).all()
 
-@router.get("/live-vehicles/")
-async def fetch_live_vehicles():
-    """
-    Return GeoJSON for live vehicle locations (buses, shuttles)
-    """
-    data = get_live_vehicles()
-    return JSONResponse(content=data)
+@router.get("/pois/{poi_id}", response_model=POISchema)
+def get_poi(poi_id: int, db: Session = Depends(get_db)):
+    poi = db.query(POI).filter(POI.id == poi_id).first()
+    if not poi:
+        raise HTTPException(status_code=404, detail="POI not found")
+    return poi
 
-@router.get("/accessible/")
-async def fetch_accessible_facilities():
-    """
-    Return GeoJSON for accessible facilities/zones only
-    """
-    data = get_accessible_facilities()
-    return JSONResponse(content=data)
+@router.get("/pois/nearest", response_model=List[POISchema])
+def nearest_pois(
+    lat: float = Query(...),
+    lon: float = Query(...),
+    limit: int = 10,
+    db: Session = Depends(get_db),
+):
+    from math import radians, cos, sin, asin, sqrt
+    def haversine(lat1, lon1, lat2, lon2):
+        R = 6371000  # meters
+        dlat = radians(lat2 - lat1)
+        dlon = radians(lon2 - lon1)
+        a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+        c = 2 * asin(sqrt(a))
+        return R * c
+    pois = db.query(POI).all()
+    pois = sorted(pois, key=lambda p: haversine(lat, lon, p.lat, p.lon))
+    return pois[:limit]
 
-@router.get("/locations/real")
+@router.get("/map/locations/real")
 def get_real_locations():
     """Return real ghats, safe zones, and transport hubs from OSM data."""
     return load_osm_pois() 

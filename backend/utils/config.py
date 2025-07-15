@@ -1,5 +1,14 @@
+import redis
 import os
+from dotenv import load_dotenv
 from pathlib import Path
+
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+def get_redis():
+    return redis.Redis.from_url(REDIS_URL)
 
 # ROOT DIRECTORY
 BASE_DIR = Path(__file__).resolve().parent

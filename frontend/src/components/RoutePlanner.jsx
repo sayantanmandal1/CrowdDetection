@@ -62,49 +62,51 @@ function RoutePlanner({ onRouteFound, onStartChange, onEndChange }) {
   }));
 
   return (
-    <div className="panel">
-      <h3>🧭 Route Planner</h3>
-      <div>
-        <label>Start: </label>
+    <div className="panel route-planner-panel">
+      <h3 aria-label="Route Planner">🧭 Route Planner</h3>
+      <div className="form-row">
+        <label htmlFor="route-start">Start: </label>
         <Select
+          inputId="route-start"
           value={start}
           onChange={opt => { setStart(opt); if (onStartChange) onStartChange(opt?.loc); }}
           options={locationOptions}
           placeholder="Select start location..."
           isSearchable
-          styles={{ container: base => ({ ...base, maxWidth: '100%' }) }}
+          classNamePrefix="react-select"
         />
       </div>
-      <div>
-        <label>End: </label>
+      <div className="form-row">
+        <label htmlFor="route-end">End: </label>
         <Select
+          inputId="route-end"
           value={end}
           onChange={opt => { setEnd(opt); if (onEndChange) onEndChange(opt?.loc); }}
           options={locationOptions}
           placeholder="Select end location..."
           isSearchable
-          styles={{ container: base => ({ ...base, maxWidth: '100%' }) }}
+          classNamePrefix="react-select"
         />
       </div>
-      <div>
-        <label>User Type: </label>
-        <select value={userType} onChange={e => setUserType(e.target.value)}>
+      <div className="form-row">
+        <label htmlFor="route-user-type">User Type: </label>
+        <select id="route-user-type" value={userType} onChange={e => setUserType(e.target.value)} aria-label="Select user type">
           {USER_TYPES.map(type => (
             <option key={type} value={type}>{type}</option>
           ))}
         </select>
       </div>
-      <button onClick={handleClick} disabled={loading}>Find Route</button>
-      {loading && <p>Loading...</p>}
-      {error && <p style={{color: 'red'}}>{error}</p>}
+      <button className="route-btn" onClick={handleClick} disabled={loading} aria-label="Find Route">Find Route</button>
+      {loading && <p className="loading-text">Loading...</p>}
+      {error && <p className="error-text">{error}</p>}
       {result && result.path && (
-        <div>
+        <div className="route-result">
           <h4>Route Found</h4>
           <p>Distance: {result.total_distance_m.toFixed(1)} meters</p>
           <p>Path: {result.path.map(([lat, lon], i) => <span key={i}>({lat.toFixed(5)}, {lon.toFixed(5)}) </span>)}</p>
         </div>
       )}
-      {result && result.message && <p style={{color: 'red'}}>{result.message}</p>}
+      {result && result.message && <p className="error-text">{result.message}</p>}
     </div>
   );
 }

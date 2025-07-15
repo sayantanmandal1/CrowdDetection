@@ -54,10 +54,32 @@ coverage/
 # Ignore compiled shared objects
 *.so
 
-# Ignore frontend cache
+# Environment files
+.env
+.env.*
+frontend/.env
+backend/.env
+
+# DVC (Data Version Control)
+.dvc/
+*.dvc
+.dvcignore
+
+# IDE/editor configs
+.vscode/
+.idea/
+
+# Mac system files
+.AppleDouble
+.LSOverride
+
+# Test snapshots
+frontend/src/**/*.snap
+
+# Large model/data files
+backend/*.pt
+
+# Cache folders
+cache/
 frontend/.cache/
-backend/**/.env
-# Backend cache
-backend/**/__pycache__/
-backend/api/**/__pycache__/
-backend/services/**/__pycache__/
+backend/cache/

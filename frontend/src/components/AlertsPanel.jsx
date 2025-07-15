@@ -27,21 +27,21 @@ function AlertsPanel() {
   };
 
   return (
-    <div className="panel">
-      <h3>🚨 Emergency Alert Panel</h3>
-      <div>
-        <label>Location: </label>
-        <select value={locationId} onChange={e => setLocationId(e.target.value)}>
+    <div className="panel alerts-panel">
+      <h3 aria-label="Emergency Alert Panel">🚨 Emergency Alert Panel</h3>
+      <div className="form-row">
+        <label htmlFor="alert-location">Location: </label>
+        <select id="alert-location" value={locationId} onChange={e => setLocationId(e.target.value)} aria-label="Select location">
           {locations.map(loc => (
             <option key={loc.name} value={loc.name}>{loc.name} ({loc.category})</option>
           ))}
         </select>
       </div>
-      <div>
-        <label>People Count: </label>
-        <input type="number" value={count} onChange={e => setCount(+e.target.value)} />
+      <div className="form-row">
+        <label htmlFor="alert-count">People Count: </label>
+        <input id="alert-count" type="number" value={count} onChange={e => setCount(+e.target.value)} aria-label="People count" />
       </div>
-      <button onClick={handleClick}>Check Alert</button>
+      <button className="alert-btn" onClick={handleClick} aria-label="Check Alert">Check Alert</button>
       {alert && (
         <div className="alert">
           <p><strong>Level:</strong> {alert.alert_level}</p>

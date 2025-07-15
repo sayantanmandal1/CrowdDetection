@@ -24,11 +24,12 @@ function App() {
     <>
       <ToastContainer position="top-right" autoClose={3500} hideProgressBar={false} newestOnTop closeOnClick pauseOnFocusLoss draggable pauseOnHover theme={darkMode ? "dark" : "light"} />
       <div className="header">
-        <span role="img" aria-label="Simhastha">🕉️</span> Simhastha 2028 Smart Mobility & Access Management
+        <span role="img" aria-label="Simhastha">🔉</span> Simhastha 2028 Smart Mobility & Access Management
         <button
-          style={{ float: 'right', marginRight: 32, background: darkMode ? '#222' : '#fff', color: darkMode ? '#fff' : '#222', border: '1.5px solid #bbb', fontSize: '1.1rem', padding: '8px 18px', borderRadius: 8, boxShadow: '0 2px 8px rgba(44,62,80,0.08)' }}
+          className="toggle-theme-btn"
           onClick={() => setDarkMode(v => !v)}
           aria-pressed={darkMode}
+          aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
         >
           {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
         </button>
@@ -36,30 +37,34 @@ function App() {
       <div className="app-container">
         <div className="sidebar">
           <button
-            style={{marginBottom: 12, background: showAccessible ? '#43a047' : undefined}}
+            className={`sidebar-btn${showAccessible ? ' active' : ''}`}
             onClick={() => setShowAccessible(v => !v)}
             aria-pressed={showAccessible}
+            aria-label="Toggle Accessibility Overlay"
           >
             {showAccessible ? 'Hide' : 'Show'} Accessibility Overlay
           </button>
           <button
-            style={{marginBottom: 12, background: showTransport ? '#4f8cff' : undefined}}
+            className={`sidebar-btn${showTransport ? ' active' : ''}`}
             onClick={() => setShowTransport(v => !v)}
             aria-pressed={showTransport}
+            aria-label="Toggle Public Transport"
           >
             {showTransport ? 'Hide' : 'Show'} Public Transport
           </button>
           <button
-            style={{marginBottom: 12, background: showAlerts ? '#e53935' : undefined}}
+            className={`sidebar-btn${showAlerts ? ' active' : ''}`}
             onClick={() => setShowAlerts(v => !v)}
             aria-pressed={showAlerts}
+            aria-label="Toggle Alerts"
           >
             {showAlerts ? 'Hide' : 'Show'} Alerts
           </button>
           <button
-            style={{marginBottom: 18, background: showVIP ? 'gold' : undefined, color: showVIP ? '#222' : undefined, fontWeight: showVIP ? 700 : undefined}}
+            className={`sidebar-btn${showVIP ? ' active' : ''}`}
             onClick={() => setShowVIP(v => !v)}
             aria-pressed={showVIP}
+            aria-label="Toggle VIP Route"
           >
             {showVIP ? 'Hide' : 'Show'} VIP Route
           </button>

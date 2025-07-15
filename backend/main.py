@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.endpoints import crowd, prediction, map, alerts, routing
+from api import router as api_router
 
 app = FastAPI(title="Crowd Intelligence API", version="1.0")
 
@@ -16,6 +17,6 @@ app.add_middleware(
 # Register all routes
 app.include_router(crowd.router, prefix="/crowd", tags=["Crowd Detection"])
 app.include_router(prediction.router, prefix="/predict", tags=["Crowd Prediction"])
-app.include_router(map.router, prefix="/map", tags=["Map GeoJSON"])
 app.include_router(alerts.router, prefix="/alerts", tags=["Emergency Alerts"])
-app.include_router(routing.router, prefix="/routes", tags=["Routing"]) 
+app.include_router(routing.router, prefix="/routes", tags=["Routing"])
+app.include_router(api_router) 
