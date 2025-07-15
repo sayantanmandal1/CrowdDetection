@@ -19,26 +19,52 @@ for u, v, w in edges:
 
 # Simulate blocked/unsafe nodes
 unsafe_nodes = {"C"}  # e.g., due to a stampede or fire
+steep_nodes = {"B"}    # e.g., steep or inaccessible for Divyangjan/elderly
+vip_priority_edges = [("A", "F"), ("F", "E")]  # VIP priority route
 
-def compute_safe_path(start, end):
+
+def compute_smart_path(start, end, user_type):
+    G_smart = G.copy()
+    removed_nodes = set()
+    edge_weights = nx.get_edge_attributes(G_smart, 'weight')
+
+    if user_type == "public":
+        # Remove unsafe nodes for public
+        G_smart.remove_nodes_from(unsafe_nodes)
+        removed_nodes = unsafe_nodes
+    elif user_type.lower() == "vip":
+        # VIPs: prioritize certain edges by lowering their weights
+        for u, v in vip_priority_edges:
+            if G_smart.has_edge(u, v):
+                G_smart[u][v]['weight'] = 0.5  # Lower weight for VIP priority
+        G_smart.remove_nodes_from(unsafe_nodes)  # Still avoid unsafe
+        removed_nodes = unsafe_nodes
+    elif user_type.lower() in ["divyangjan", "elderly"]:
+        # Remove unsafe and steep nodes for accessibility
+        G_smart.remove_nodes_from(unsafe_nodes | steep_nodes)
+        removed_nodes = unsafe_nodes | steep_nodes
+    else:
+        # Default: treat as public
+        G_smart.remove_nodes_from(unsafe_nodes)
+        removed_nodes = unsafe_nodes
+
     try:
-        # Temporarily remove unsafe nodes
-        G_safe = G.copy()
-        G_safe.remove_nodes_from(unsafe_nodes)
-
-        path = nx.dijkstra_path(G_safe, start, end, weight="weight")
-        length = nx.dijkstra_path_length(G_safe, start, end, weight="weight")
-
+        path = nx.dijkstra_path(G_smart, start, end, weight="weight")
+        length = nx.dijkstra_path_length(G_smart, start, end, weight="weight")
         return {
             "start": start,
             "end": end,
+            "user_type": user_type,
             "path": path,
-            "total_distance": length
+            "total_distance": length,
+            "removed_nodes": list(removed_nodes)
         }
     except nx.NetworkXNoPath:
         return {
             "start": start,
             "end": end,
+            "user_type": user_type,
             "path": None,
-            "message": "No safe path available."
+            "message": "No safe path available for this user type.",
+            "removed_nodes": list(removed_nodes)
         } 

@@ -1,13 +1,17 @@
 from fastapi import APIRouter, Query
-from services.routing_service import compute_safe_path
+from services.routing_service import compute_smart_path
 from fastapi.responses import JSONResponse
 
 router = APIRouter()
 
-@router.get("/safe-path/")
-async def get_safe_path(start: str = Query(...), end: str = Query(...)):
+@router.get("/smart-path/")
+async def get_smart_path(
+    start: str = Query(...),
+    end: str = Query(...),
+    user_type: str = Query("public", description="User type: public, VIP, Divyangjan, elderly")
+):
     """
-    Return safest available route between two nodes (e.g., 'A' to 'F')
+    Return the best available route between two nodes, considering user type (public, VIP, Divyangjan, elderly)
     """
-    result = compute_safe_path(start, end)
+    result = compute_smart_path(start, end, user_type)
     return JSONResponse(content=result) 
