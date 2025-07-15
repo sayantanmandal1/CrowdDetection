@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { fetchAlert, fetchRealLocations } from "../api";
+import { toast } from "react-toastify";
 
 function AlertsPanel() {
   const [locations, setLocations] = useState([]);
@@ -18,6 +19,11 @@ function AlertsPanel() {
   const handleClick = async () => {
     const data = await fetchAlert(locationId, count, false, false);
     setAlert(data);
+    if (data && data.alert_level === "HIGH") {
+      toast.warn(`HIGH alert at ${locationId}!`, { icon: "🚨" });
+    } else if (data && data.alert_level) {
+      toast.info(`${data.alert_level} alert at ${locationId}.`, { icon: "⚠️" });
+    }
   };
 
   return (
