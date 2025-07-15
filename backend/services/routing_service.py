@@ -1,70 +1,99 @@
 import networkx as nx
+import osmnx as ox
+from services.map_service import load_osm_pois, UJJAIN_CENTER, UJJAIN_DIST
 
-# Simulate city graph
-G = nx.Graph()
+# Load real POIs
+POIS = load_osm_pois()
 
-# Nodes represent intersections or key points
-nodes = ["A", "B", "C", "D", "E", "F"]
-G.add_nodes_from(nodes)
+# Build real street network graph for Ujjain
+G = ox.graph_from_point(UJJAIN_CENTER, dist=UJJAIN_DIST, network_type='walk')
 
-# Edges with weights (distance or risk score)
-edges = [
-    ("A", "B", 1), ("B", "C", 2), ("C", "D", 1),
-    ("D", "E", 3), ("A", "F", 5), ("F", "E", 2),
-    ("B", "F", 2)  # Alternative shortcut
-]
+# Helper: get nearest node to a lat/lon
+get_nearest_node = lambda lat, lon: ox.nearest_nodes(G, lon, lat)
 
-for u, v, w in edges:
-    G.add_edge(u, v, weight=w)
+# Helper: flatten all POIs to a list of dicts with type
+ALL_LOCATIONS = []
+for t in ["ghats", "safe_zones", "transport_hubs"]:
+    for loc in POIS.get(t, []):
+        loc["category"] = t
+        ALL_LOCATIONS.append(loc)
 
-# Simulate blocked/unsafe nodes
-unsafe_nodes = {"C"}  # e.g., due to a stampede or fire
-steep_nodes = {"B"}    # e.g., steep or inaccessible for Divyangjan/elderly
-vip_priority_edges = [("A", "F"), ("F", "E")]  # VIP priority route
+# Helper: get location by name
+def get_location_by_name(name):
+    for loc in ALL_LOCATIONS:
+        if loc["name"].lower() == name.lower():
+            return loc
+    return None
 
+# Example: mark some nodes as unsafe/steep for demo (in real use, use live data)
+unsafe_nodes = set()
+steep_nodes = set()
+for loc in ALL_LOCATIONS:
+    if "hospital" in loc["name"].lower():
+        steep_nodes.add(get_nearest_node(loc["lat"], loc["lon"]))
+    if "police" in loc["name"].lower():
+        unsafe_nodes.add(get_nearest_node(loc["lat"], loc["lon"]))
+
+vip_priority_edges = []  # Could be set based on event config
 
 def compute_smart_path(start, end, user_type):
+    # Accept start/end as names or coordinates
+    if isinstance(start, dict):
+        start_lat, start_lon = start["lat"], start["lon"]
+    else:
+        loc = get_location_by_name(start)
+        if not loc:
+            return {"error": f"Start location '{start}' not found."}
+        start_lat, start_lon = loc["lat"], loc["lon"]
+    if isinstance(end, dict):
+        end_lat, end_lon = end["lat"], end["lon"]
+    else:
+        loc = get_location_by_name(end)
+        if not loc:
+            return {"error": f"End location '{end}' not found."}
+        end_lat, end_lon = loc["lat"], loc["lon"]
+
+    start_node = get_nearest_node(start_lat, start_lon)
+    end_node = get_nearest_node(end_lat, end_lon)
+
     G_smart = G.copy()
     removed_nodes = set()
-    edge_weights = nx.get_edge_attributes(G_smart, 'weight')
 
     if user_type == "public":
-        # Remove unsafe nodes for public
         G_smart.remove_nodes_from(unsafe_nodes)
         removed_nodes = unsafe_nodes
     elif user_type.lower() == "vip":
-        # VIPs: prioritize certain edges by lowering their weights
-        for u, v in vip_priority_edges:
-            if G_smart.has_edge(u, v):
-                G_smart[u][v]['weight'] = 0.5  # Lower weight for VIP priority
-        G_smart.remove_nodes_from(unsafe_nodes)  # Still avoid unsafe
+        # VIPs: prioritize certain edges (not implemented in this demo)
+        G_smart.remove_nodes_from(unsafe_nodes)
         removed_nodes = unsafe_nodes
     elif user_type.lower() in ["divyangjan", "elderly"]:
-        # Remove unsafe and steep nodes for accessibility
         G_smart.remove_nodes_from(unsafe_nodes | steep_nodes)
         removed_nodes = unsafe_nodes | steep_nodes
     else:
-        # Default: treat as public
         G_smart.remove_nodes_from(unsafe_nodes)
         removed_nodes = unsafe_nodes
 
     try:
-        path = nx.dijkstra_path(G_smart, start, end, weight="weight")
-        length = nx.dijkstra_path_length(G_smart, start, end, weight="weight")
+        path_nodes = nx.shortest_path(G_smart, start_node, end_node, weight="length")
+        path_coords = [(G.nodes[n]["y"], G.nodes[n]["x"]) for n in path_nodes]
+        total_distance = sum(
+            G.edges[path_nodes[i], path_nodes[i+1], 0]["length"]
+            for i in range(len(path_nodes)-1)
+        )
         return {
-            "start": start,
-            "end": end,
+            "start": {"lat": start_lat, "lon": start_lon},
+            "end": {"lat": end_lat, "lon": end_lon},
             "user_type": user_type,
-            "path": path,
-            "total_distance": length,
+            "path": path_coords,
+            "total_distance_m": total_distance,
             "removed_nodes": list(removed_nodes)
         }
-    except nx.NetworkXNoPath:
+    except Exception as e:
         return {
-            "start": start,
-            "end": end,
+            "start": {"lat": start_lat, "lon": start_lon},
+            "end": {"lat": end_lat, "lon": end_lon},
             "user_type": user_type,
             "path": None,
-            "message": "No safe path available for this user type.",
+            "message": f"No safe path available: {str(e)}",
             "removed_nodes": list(removed_nodes)
         } 

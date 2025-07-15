@@ -1,3 +1,53 @@
+import osmnx as ox
+import json
+
+# Ujjain city center coordinates
+UJJAIN_CENTER = (23.1765, 75.7885)
+UJJAIN_DIST = 7000  # meters radius
+
+# OSM tags for points of interest
+GHAT_TAGS = {"leisure": "beach_resort", "tourism": "attraction", "waterway": "riverbank"}
+SAFE_ZONE_TAGS = {"amenity": ["hospital", "police", "park", "school", "community_centre"]}
+TRANSPORT_TAGS = {"amenity": ["bus_station", "taxi", "ferry_terminal"], "railway": "station"}
+
+OSM_FILENAME = "ujjain_osm_pois.json"
+
+def fetch_osm_pois():
+    # Download OSM data for Ujjain
+    G = ox.graph_from_point(UJJAIN_CENTER, dist=UJJAIN_DIST, network_type='walk')
+    pois = ox.features_from_point(UJJAIN_CENTER, tags={**GHAT_TAGS, **SAFE_ZONE_TAGS, **TRANSPORT_TAGS}, dist=UJJAIN_DIST)
+
+    def extract_features(tags):
+        features = []
+        for idx, row in pois.iterrows():
+            for k, v in tags.items():
+                if k in row and (row[k] == v or (isinstance(v, list) and row[k] in v)):
+                    features.append({
+                        "name": row.get("name", str(idx)),
+                        "type": v if isinstance(v, str) else row[k],
+                        "lat": row.geometry.centroid.y if hasattr(row.geometry, 'centroid') else row.geometry.y,
+                        "lon": row.geometry.centroid.x if hasattr(row.geometry, 'centroid') else row.geometry.x
+                    })
+        return features
+
+    ghats = extract_features(GHAT_TAGS)
+    safe_zones = extract_features(SAFE_ZONE_TAGS)
+    transport_hubs = extract_features(TRANSPORT_TAGS)
+
+    data = {
+        "ghats": ghats,
+        "safe_zones": safe_zones,
+        "transport_hubs": transport_hubs
+    }
+    with open(OSM_FILENAME, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return data
+
+# Utility to load processed POIs
+def load_osm_pois():
+    with open(OSM_FILENAME, "r", encoding="utf-8") as f:
+        return json.load(f)
+
 def get_geojson_map():
     """
     Return static or generated GeoJSON for zones:

@@ -1,13 +1,22 @@
-import React, { useState } from "react";
-import { fetchAlert } from "../api";
+import React, { useState, useEffect } from "react";
+import { fetchAlert, fetchRealLocations } from "../api";
 
 function AlertsPanel() {
-  const [locationId, setLocationId] = useState("ghat1");
-  const [count, setCount] = useState(1200);
+  const [locations, setLocations] = useState([]);
+  const [locationId, setLocationId] = useState("");
+  const [count, setCount] = useState(100);
   const [alert, setAlert] = useState(null);
 
+  useEffect(() => {
+    fetchRealLocations().then(data => {
+      const all = [...(data.ghats || []), ...(data.safe_zones || []), ...(data.transport_hubs || [])];
+      setLocations(all);
+      if (all.length > 0) setLocationId(all[0].name);
+    });
+  }, []);
+
   const handleClick = async () => {
-    const data = await fetchAlert(locationId, count, true, false);
+    const data = await fetchAlert(locationId, count, false, false);
     setAlert(data);
   };
 
@@ -15,8 +24,12 @@ function AlertsPanel() {
     <div className="panel">
       <h3>🚨 Emergency Alert Panel</h3>
       <div>
-        <label>Location ID: </label>
-        <input value={locationId} onChange={e => setLocationId(e.target.value)} />
+        <label>Location: </label>
+        <select value={locationId} onChange={e => setLocationId(e.target.value)}>
+          {locations.map(loc => (
+            <option key={loc.name} value={loc.name}>{loc.name} ({loc.category})</option>
+          ))}
+        </select>
       </div>
       <div>
         <label>People Count: </label>

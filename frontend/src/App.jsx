@@ -1,17 +1,20 @@
-import React from "react";
+import React, { useState } from "react";
 import MapView from "./components/MapView";
-import AlertsPanel from "./components/AlertsPanel";
 import RoutePlanner from "./components/RoutePlanner";
+import AlertsPanel from "./components/AlertsPanel";
 import "./App.css";
 
 function App() {
+  const [route, setRoute] = useState(null);
+
   return (
     <div className="app-container">
-      <h1>🕉️ Crowd Management Dashboard</h1>
-      <MapView />
-      <div className="panel-row">
+      <div className="sidebar">
+        <RoutePlanner onRouteFound={setRoute} />
         <AlertsPanel />
-        <RoutePlanner />
+      </div>
+      <div className="main-content">
+        <MapView route={route} />
       </div>
     </div>
   );

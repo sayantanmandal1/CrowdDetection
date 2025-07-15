@@ -1,0 +1,55 @@
+{
+  "ghats": [
+    {
+      "name": "religious monuments",
+      "type": "attraction",
+      "lat": 23.1827698,
+      "lon": 75.7656586
+    },
+    {
+      "name": "Ghats",
+      "type": "attraction",
+      "lat": 23.1850929,
+      "lon": 75.7631823
+    },
+    {
+      "name": "Mahakal Lok",
+      "type": "attraction",
+      "lat": 23.178434725844586,
+      "lon": 75.76926576583335
+    }
+  ],
+  "safe_zones": [],
+  "transport_hubs": [
+    {
+      "name": "Ujjain Junction",
+      "type": "station",
+      "lat": 23.1795347,
+      "lon": 75.781954
+    },
+    {
+      "name": "Vikram Nagar",
+      "type": "station",
+      "lat": 23.161783,
+      "lon": 75.8179959
+    },
+    {
+      "name": "Chintaman Ganesh",
+      "type": "station",
+      "lat": 23.1460698,
+      "lon": 75.740831
+    },
+    {
+      "name": "Nanakheda bus station",
+      "type": "bus_station",
+      "lat": 23.1588345,
+      "lon": 75.788525
+    },
+    {
+      "name": "Dewas Gate Bus station, buses north and local",
+      "type": "bus_station",
+      "lat": 23.1809261,
+      "lon": 75.7823841
+    }
+  ]
+}

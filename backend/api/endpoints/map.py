@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from services.map_service import get_geojson_map, get_public_transport, get_shuttles, get_live_vehicles, get_accessible_facilities
+from services.map_service import get_geojson_map, get_public_transport, get_shuttles, get_live_vehicles, get_accessible_facilities, load_osm_pois
 from fastapi.responses import JSONResponse
 
 router = APIRouter()
@@ -42,4 +42,9 @@ async def fetch_accessible_facilities():
     Return GeoJSON for accessible facilities/zones only
     """
     data = get_accessible_facilities()
-    return JSONResponse(content=data) 
+    return JSONResponse(content=data)
+
+@router.get("/locations/real")
+def get_real_locations():
+    """Return real ghats, safe zones, and transport hubs from OSM data."""
+    return load_osm_pois() 

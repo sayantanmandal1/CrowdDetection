@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useLayoutEffect } from "react";
 import L from "leaflet";
-import { fetchGeoJSON } from "../api";
+import { fetchRealLocations } from "../api";
 import "leaflet/dist/leaflet.css";
 import "./MapView.css";
 
@@ -16,62 +16,36 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-function MapView() {
+function MapView({ route }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
+  const markersRef = useRef([]);
+  const routeLayerRef = useRef(null);
 
-  useEffect(() => {
-    const initMap = async () => {
-      // Prevent multiple initializations
-      if (mapInstanceRef.current) {
-        return;
-      }
-
-      try {
-        const geoData = await fetchGeoJSON();
-
-        // Create map instance
-        const map = L.map(mapRef.current).setView([22.717, 75.857], 13);
-        mapInstanceRef.current = map;
-
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: '&copy; OpenStreetMap contributors',
-        }).addTo(map);
-
-        const zoneColors = {
-          critical_zone: "#d62728",
-          emergency: "#1f77b4",
-          sanitation: "#2ca02c",
-        };
-
-        L.geoJSON(geoData, {
-          style: feature =>
-            feature.geometry.type === "Polygon"
-              ? {
-                  color: zoneColors[feature.properties.type] || "#888",
-                  weight: 2,
-                  fillOpacity: 0.5,
-                }
-              : undefined,
-          pointToLayer: (feature, latlng) => {
-            // Use a real marker for points
-            return L.marker(latlng, { icon: new L.Icon.Default() });
-          },
-          onEachFeature: (feature, layer) => {
-            if (feature.properties && feature.properties.name) {
-              layer.bindPopup(`<strong>${feature.properties.name}</strong>`);
-            }
-          },
-        }).addTo(map);
-      } catch (error) {
-        console.error("Error initializing map:", error);
-      }
-    };
-
-    initMap();
-
-    // Cleanup function
+  useLayoutEffect(() => {
+    if (!mapRef.current || mapInstanceRef.current) return;
+    // Initialize map only once
+    const map = L.map(mapRef.current).setView([23.1765, 75.7885], 13);
+    mapInstanceRef.current = map;
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; OpenStreetMap contributors',
+    }).addTo(map);
+    // Add real POI markers
+    fetchRealLocations().then(data => {
+      if (!mapInstanceRef.current) return;
+      const all = [...(data.ghats || []), ...(data.safe_zones || []), ...(data.transport_hubs || [])];
+      markersRef.current = all.map(loc => {
+        if (!mapInstanceRef.current) return null;
+        const marker = L.marker([loc.lat, loc.lon], { icon: new L.Icon.Default() })
+          .addTo(mapInstanceRef.current)
+          .bindPopup(`<strong>${loc.name}</strong> (${loc.category})`);
+        return marker;
+      }).filter(Boolean);
+    });
     return () => {
+      // Cleanup markers and map
+      markersRef.current.forEach(marker => marker && map.removeLayer(marker));
+      markersRef.current = [];
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -79,7 +53,22 @@ function MapView() {
     };
   }, []);
 
-  return <div className="map-container" ref={mapRef} />;
+  // Draw route if provided
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    if (routeLayerRef.current) {
+      map.removeLayer(routeLayerRef.current);
+      routeLayerRef.current = null;
+    }
+    if (route && route.path && route.path.length > 1) {
+      const latlngs = route.path.map(([lat, lon]) => [lat, lon]);
+      routeLayerRef.current = L.polyline(latlngs, { color: "blue", weight: 5 }).addTo(map);
+      map.fitBounds(routeLayerRef.current.getBounds(), { padding: [30, 30] });
+    }
+  }, [route]);
+
+  return <div ref={mapRef} id="map" style={{ height: "500px", width: "100%" }} />;
 }
 
 export default MapView;

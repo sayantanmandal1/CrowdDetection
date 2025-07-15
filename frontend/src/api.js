@@ -19,4 +19,10 @@ export const fetchRoute = async (start, end) => {
     params: { start, end },
   });
   return res.data;
-}; 
+};
+
+export async function fetchRealLocations() {
+  const res = await fetch("http://localhost:8000/map/locations/real");
+  if (!res.ok) throw new Error("Failed to fetch real locations");
+  return await res.json();
+} 
