@@ -342,47 +342,28 @@ function MapView({ route, startLoc, endLoc, showAccessible, showTransport, showA
     };
   }, [nearestSafeZone]);
 
-  return <>
-    <div ref={mapRef} id="map" style={{ height: "500px", width: "100%" }} />
-    <div
-      style={{
-        position: 'absolute',
-        bottom: 32,
-        right: 32,
-        zIndex: 1000,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-end',
-        pointerEvents: 'none',
-      }}
-    >
-      <button
-        className={"fab" + (darkMode ? " fab-dark" : "")}
-        style={{ pointerEvents: 'auto' }}
-        onClick={() => setFabOpen(v => !v)}
-        aria-label="Quick Actions"
-      >
-        {fabOpen ? '✖' : '⚡'}
-      </button>
-      {fabOpen && (
-        <div className="fab-menu" style={{
-          background: darkMode ? '#23293a' : '#fff',
-          color: darkMode ? '#eaf2ff' : '#222',
-          borderRadius: 12,
-          boxShadow: '0 4px 24px rgba(44,62,80,0.18)',
-          marginBottom: 12,
-          padding: '10px 18px',
-          minWidth: 180,
-          pointerEvents: 'auto',
-        }}>
-          <button style={{ width: '100%', margin: 0, marginBottom: 8 }} onClick={handleFindNearestSafeZone}>
-            🛡️ Find Nearest Safe Zone
-          </button>
-          {/* Add more quick actions here */}
-        </div>
-      )}
+  return (
+    <div className="mapview-root">
+      <div ref={mapRef} id="map" className="mapview-map" aria-label="Map" />
+      <div className="fab-container">
+        <button
+          className={"fab" + (darkMode ? " fab-dark" : "")}
+          onClick={() => setFabOpen(v => !v)}
+          aria-label="Quick Actions"
+        >
+          {fabOpen ? '✖' : <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><lightning x1="12" y1="8" x2="12" y2="16"/><polyline points="12 8 16 12 12 16"/></svg>}
+        </button>
+        {fabOpen && (
+          <div className="fab-menu">
+            <button className="fab-menu-btn" onClick={handleFindNearestSafeZone} aria-label="Find Nearest Safe Zone">
+              🛡️ Find Nearest Safe Zone
+            </button>
+            {/* Add more quick actions here */}
+          </div>
+        )}
+      </div>
     </div>
-  </>;
+  );
 }
 
 export default MapView;

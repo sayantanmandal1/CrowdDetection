@@ -62,51 +62,55 @@ function RoutePlanner({ onRouteFound, onStartChange, onEndChange }) {
   }));
 
   return (
-    <div className="panel route-planner-panel">
-      <h3 aria-label="Route Planner">🧭 Route Planner</h3>
-      <div className="form-row">
-        <label htmlFor="route-start">Start: </label>
-        <Select
-          inputId="route-start"
-          value={start}
-          onChange={opt => { setStart(opt); if (onStartChange) onStartChange(opt?.loc); }}
-          options={locationOptions}
-          placeholder="Select start location..."
-          isSearchable
-          classNamePrefix="react-select"
-        />
-      </div>
-      <div className="form-row">
-        <label htmlFor="route-end">End: </label>
-        <Select
-          inputId="route-end"
-          value={end}
-          onChange={opt => { setEnd(opt); if (onEndChange) onEndChange(opt?.loc); }}
-          options={locationOptions}
-          placeholder="Select end location..."
-          isSearchable
-          classNamePrefix="react-select"
-        />
-      </div>
-      <div className="form-row">
-        <label htmlFor="route-user-type">User Type: </label>
-        <select id="route-user-type" value={userType} onChange={e => setUserType(e.target.value)} aria-label="Select user type">
-          {USER_TYPES.map(type => (
-            <option key={type} value={type}>{type}</option>
-          ))}
-        </select>
-      </div>
-      <button className="route-btn" onClick={handleClick} disabled={loading} aria-label="Find Route">Find Route</button>
-      {loading && <p className="loading-text">Loading...</p>}
-      {error && <p className="error-text">{error}</p>}
-      {result && result.path && (
-        <div className="route-result">
-          <h4>Route Found</h4>
-          <p>Distance: {result.total_distance_m.toFixed(1)} meters</p>
-          <p>Path: {result.path.map(([lat, lon], i) => <span key={i}>({lat.toFixed(5)}, {lon.toFixed(5)}) </span>)}</p>
+    <div className="card route-planner-panel">
+      <div className="card-body">
+        <h3 className="card-title mb-3" aria-label="Route Planner">🧭 Route Planner</h3>
+        <div className="mb-3 form-row">
+          <label htmlFor="route-start" className="form-label">Start: </label>
+          <Select
+            inputId="route-start"
+            classNamePrefix="react-select"
+            className="form-control"
+            value={start}
+            onChange={opt => { setStart(opt); if (onStartChange) onStartChange(opt?.loc); }}
+            options={locationOptions}
+            placeholder="Select start location..."
+            isSearchable
+          />
         </div>
-      )}
-      {result && result.message && <p className="error-text">{result.message}</p>}
+        <div className="mb-3 form-row">
+          <label htmlFor="route-end" className="form-label">End: </label>
+          <Select
+            inputId="route-end"
+            classNamePrefix="react-select"
+            className="form-control"
+            value={end}
+            onChange={opt => { setEnd(opt); if (onEndChange) onEndChange(opt?.loc); }}
+            options={locationOptions}
+            placeholder="Select end location..."
+            isSearchable
+          />
+        </div>
+        <div className="mb-3 form-row">
+          <label htmlFor="route-user-type" className="form-label">User Type: </label>
+          <select id="route-user-type" className="form-select" value={userType} onChange={e => setUserType(e.target.value)} aria-label="Select user type">
+            {USER_TYPES.map(type => (
+              <option key={type} value={type}>{type}</option>
+            ))}
+          </select>
+        </div>
+        <button className="btn btn-primary w-100 route-btn" onClick={handleClick} disabled={loading} aria-label="Find Route">Find Route</button>
+        {loading && <p className="loading-text">Loading...</p>}
+        {error && <p className="error-text">{error}</p>}
+        {result && result.path && (
+          <div className="route-result mt-3">
+            <h4>Route Found</h4>
+            <p>Distance: {result.total_distance_m.toFixed(1)} meters</p>
+            <p>Path: {result.path.map(([lat, lon], i) => <span key={i}>({lat.toFixed(5)}, {lon.toFixed(5)}) </span>)}</p>
+          </div>
+        )}
+        {result && result.message && <p className="error-text">{result.message}</p>}
+      </div>
     </div>
   );
 }
