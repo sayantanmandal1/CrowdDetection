@@ -55,23 +55,15 @@ function MapPage() {
   const [showTransport, setShowTransport] = useState(false);
   const [showAlerts, setShowAlerts] = useState(false);
   const [showVIP, setShowVIP] = useState(false);
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [activePanel, setActivePanel] = useState('route');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState('connected');
+  const [showNotifications, setShowNotifications] = useState(false);
   const [mapStyle, setMapStyle] = useState('satellite');
   const [showMiniMap, setShowMiniMap] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
-  const [batteryLevel, setBatteryLevel] = useState(85);
-  const [signalStrength, setSignalStrength] = useState(4);
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [weatherData, setWeatherData] = useState({ temp: 28, condition: 'sunny' });
-  const [crowdLevel, setCrowdLevel] = useState(65);
-  const [activeUsers, setActiveUsers] = useState(12847);
-  const [systemHealth, setSystemHealth] = useState(98.5);
 
   const panels = [
     { id: 'route', label: 'Route Planner', icon: Navigation },
@@ -120,16 +112,6 @@ function MapPage() {
   }, [darkMode]);
 
   useEffect(() => {
-    // Real-time system updates
-    const systemInterval = setInterval(() => {
-      setCurrentTime(new Date());
-      setBatteryLevel(prev => Math.max(20, prev - Math.random() * 0.5));
-      setSignalStrength(Math.floor(Math.random() * 5));
-      setCrowdLevel(prev => Math.max(0, Math.min(100, prev + (Math.random() - 0.5) * 10)));
-      setActiveUsers(prev => prev + Math.floor((Math.random() - 0.5) * 100));
-      setSystemHealth(prev => Math.max(90, Math.min(100, prev + (Math.random() - 0.5) * 2)));
-    }, 2000);
-
     // Enhanced notifications with smart categorization
     const notificationInterval = setInterval(() => {
       const smartNotifications = [
@@ -167,7 +149,6 @@ function MapPage() {
     }, 12000);
 
     return () => {
-      clearInterval(systemInterval);
       clearInterval(notificationInterval);
     };
   }, []);
@@ -212,81 +193,12 @@ function MapPage() {
         toastClassName="custom-toast"
       />
       
-      {/* Premium Status Bar */}
-      <motion.div 
-        className="premium-status-bar"
-        initial={{ y: -50, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-      >
-        <div className="status-left">
-          <div className="system-status">
-            <div className={`status-indicator ${connectionStatus}`} />
-            <span className="status-text">System Health: {systemHealth.toFixed(1)}%</span>
-          </div>
-          <div className="live-stats">
-            <Users size={14} />
-            <span>{activeUsers.toLocaleString()} active</span>
-          </div>
-          <div className="crowd-indicator">
-            <Activity size={14} />
-            <span>Crowd: {crowdLevel}%</span>
-            <div className="crowd-bar">
-              <div 
-                className="crowd-fill" 
-                style={{ 
-                  width: `${crowdLevel}%`,
-                  backgroundColor: crowdLevel > 80 ? '#f5576c' : crowdLevel > 60 ? '#ffd700' : '#43e97b'
-                }}
-              />
-            </div>
-          </div>
-        </div>
-        
-        <div className="status-center">
-          <div className="weather-widget">
-            <span className="weather-icon">☀️</span>
-            <span>{weatherData.temp}°C</span>
-          </div>
-          <div className="time-display">
-            {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </div>
-        </div>
-        
-        <div className="status-right">
-          <div className="signal-indicator">
-            <Signal size={14} />
-            <div className="signal-bars">
-              {[...Array(5)].map((_, i) => (
-                <div 
-                  key={i} 
-                  className={`signal-bar ${i < signalStrength ? 'active' : ''}`} 
-                />
-              ))}
-            </div>
-          </div>
-          <div className="battery-indicator">
-            <Battery size={14} />
-            <span>{batteryLevel.toFixed(0)}%</span>
-            <div className="battery-level">
-              <div 
-                className="battery-fill" 
-                style={{ 
-                  width: `${batteryLevel}%`,
-                  backgroundColor: batteryLevel > 50 ? '#43e97b' : batteryLevel > 20 ? '#ffd700' : '#f5576c'
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
       {/* Premium Navigation Bar */}
       <motion.div 
         className="premium-nav"
         initial={{ y: -100 }}
         animate={{ y: 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 30, delay: 0.1 }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
       >
         <div className="nav-left">
           <motion.button
@@ -360,6 +272,7 @@ function MapPage() {
             
             <motion.button
               className="nav-btn notification-btn premium-notification"
+              onClick={() => setShowNotifications(!showNotifications)}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               data-tooltip="Notifications"
@@ -408,7 +321,7 @@ function MapPage() {
 
       {/* Notifications Panel */}
       <AnimatePresence>
-        {notifications.length > 0 && (
+        {showNotifications && notifications.length > 0 && (
           <motion.div 
             className="notifications-panel"
             initial={{ x: 400, opacity: 0 }}
@@ -419,9 +332,17 @@ function MapPage() {
             <div className="notifications-header">
               <Activity size={18} />
               <span>Live Updates</span>
+              <motion.button
+                className="close-notifications"
+                onClick={() => setShowNotifications(false)}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+              >
+                <X size={16} />
+              </motion.button>
             </div>
             <div className="notifications-list">
-              {notifications.slice(0, 3).map((notification) => (
+              {notifications.slice(0, 5).map((notification) => (
                 <motion.div
                   key={notification.id}
                   className={`notification-item ${notification.type}`}
