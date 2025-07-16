@@ -10,3 +10,7 @@ psycopg2-binary
 passlib[bcrypt]
 python-jose[cryptography]
 fastapi-users[sqlalchemy]
+scikit-learn
+numpy
+pandas
+redis

@@ -24,19 +24,9 @@ import {
   Activity,
   Layers,
   Target,
-  Compass,
-  Wifi,
-  Battery,
-  Signal,
   Star,
-  TrendingUp,
-  Eye,
-  EyeOff,
   Volume2,
-  VolumeX,
-  Smartphone,
-  Monitor,
-  Palette
+  VolumeX
 } from "lucide-react";
 import MapView from "./components/MapView";
 import RoutePlanner from "./components/RoutePlanner";
@@ -48,6 +38,8 @@ import "react-toastify/dist/ReactToastify.css";
 import "./App.css";
 
 function MapPage() {
+  // Current location state
+  const [currentLocation, setCurrentLocation] = useState(null);
   const [route, setRoute] = useState(null);
   const [startLoc, setStartLoc] = useState(null);
   const [endLoc, setEndLoc] = useState(null);
@@ -229,10 +221,35 @@ function MapPage() {
     }
   };
 
+  // Handle current location updates
+  const handleCurrentLocationSet = (location) => {
+    setCurrentLocation(location);
+    toast.success(`📍 Current location set: ${location.name}`, {
+      position: "top-right",
+      autoClose: 3000,
+    });
+  };
+
+  // Handle location updates from map interactions
+  const handleLocationUpdate = (location, type) => {
+    if (type === 'start') {
+      setStartLoc(location);
+    } else if (type === 'end') {
+      setEndLoc(location);
+    }
+  };
+
   const renderActivePanel = () => {
     switch (activePanel) {
       case 'route':
-        return <RoutePlanner onRouteFound={setRoute} onStartChange={setStartLoc} onEndChange={setEndLoc} />;
+        return (
+          <RoutePlanner 
+            onRouteFound={setRoute} 
+            onStartChange={setStartLoc} 
+            onEndChange={setEndLoc}
+            currentLocation={currentLocation}
+          />
+        );
       case 'alerts':
         return <AlertsPanel />;
       case 'stats':
@@ -240,7 +257,14 @@ function MapPage() {
       case 'settings':
         return <SettingsPanel darkMode={darkMode} onDarkModeToggle={setDarkMode} />;
       default:
-        return <RoutePlanner onRouteFound={setRoute} onStartChange={setStartLoc} onEndChange={setEndLoc} />;
+        return (
+          <RoutePlanner 
+            onRouteFound={setRoute} 
+            onStartChange={setStartLoc} 
+            onEndChange={setEndLoc}
+            currentLocation={currentLocation}
+          />
+        );
     }
   };
 
@@ -429,7 +453,7 @@ function MapPage() {
         )}
       </AnimatePresence>
 
-      {/* Map View */}
+      {/* Enhanced Map View with AI Features */}
       <MapView
         route={route}
         startLoc={startLoc}
@@ -439,6 +463,8 @@ function MapPage() {
         showAlerts={showAlerts}
         showVIP={showVIP}
         darkMode={darkMode}
+        onLocationUpdate={handleLocationUpdate}
+        onCurrentLocationSet={handleCurrentLocationSet}
       />
 
       {/* Overlay Controls */}
