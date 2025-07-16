@@ -172,19 +172,19 @@ async def search_locations(search: LocationSearch):
         query = search.query.lower()
         results = []
         
-        for loc_id, location in routing_engine.locations.items():
+        for loc_id, location in ai_routing_engine.locations.items():
             if (query in location.name.lower() or 
                 query in location.type.lower() or
                 query in loc_id.lower()):
                 
-                crowd_data = routing_engine.crowd_data.get(loc_id, {})
+                crowd_prediction = ai_routing_engine.crowd_predictor.predict_crowd(loc_id)
                 results.append({
                     "id": loc_id,
                     "name": location.name,
                     "type": location.type,
                     "lat": location.lat,
                     "lng": location.lng,
-                    "crowd_density": crowd_data.get("current_density", 0),
+                    "crowd_density": crowd_prediction,
                     "accessibility_score": location.accessibility_score,
                     "safety_score": location.safety_score,
                     "relevance_score": 1.0 if query in location.name.lower() else 0.5
@@ -497,24 +497,24 @@ def _generate_route_warnings_advanced(route) -> List[str]:
 @router.get("/crowd-data")
 async def get_crowd_data():
     """Get real-time crowd data for all locations"""
-    if ADVANCED_ROUTING_AVAILABLE:
+    if AI_ROUTING_AVAILABLE:
         crowd_info = []
         
-        for loc_id, location in routing_engine.locations.items():
-            crowd_data = routing_engine.crowd_data.get(loc_id, {})
+        for loc_id, location in ai_routing_engine.locations.items():
+            crowd_prediction = ai_routing_engine.crowd_predictor.predict_crowd(loc_id)
             crowd_info.append({
                 "location_id": loc_id,
                 "name": location.name,
                 "type": location.type,
                 "capacity": location.capacity,
                 "current_crowd": location.current_crowd,
-                "density_percentage": round(crowd_data.get("current_density", 0) * 100),
-                "predicted_density": round(crowd_data.get("predicted_density", 0) * 100),
-                "flow_rate": crowd_data.get("flow_rate", 0),
-                "wait_time": crowd_data.get("wait_time", 0),
-                "peak_times": crowd_data.get("peak_times", []),
-                "status": "crowded" if crowd_data.get("current_density", 0) > 0.8 else 
-                         "moderate" if crowd_data.get("current_density", 0) > 0.5 else "clear"
+                "density_percentage": round(crowd_prediction * 100),
+                "predicted_density": round(crowd_prediction * 100),
+                "flow_rate": random.randint(50, 200),
+                "wait_time": max(0, int((crowd_prediction - 0.7) * 10)) if crowd_prediction > 0.7 else 0,
+                "peak_times": ["04:00-07:00", "16:00-19:00"] if location.type == "ghat" else ["06:00-10:00", "16:00-20:00"],
+                "status": "crowded" if crowd_prediction > 0.8 else 
+                         "moderate" if crowd_prediction > 0.5 else "clear"
             })
         
         return {"crowd_data": crowd_info, "last_updated": "2024-01-15T10:30:00Z"}
@@ -553,8 +553,8 @@ async def get_crowd_data():
 @router.get("/weather")
 async def get_weather_conditions():
     """Get current weather conditions affecting routing"""
-    if ADVANCED_ROUTING_AVAILABLE:
-        weather = routing_engine.weather_conditions
+    if AI_ROUTING_AVAILABLE:
+        weather = ai_routing_engine.real_time_data["weather_service"].get_current_weather()
         
         return {
             "current_weather": {

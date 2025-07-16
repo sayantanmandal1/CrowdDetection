@@ -12,7 +12,7 @@ import {
   AlertTriangle,
   CheckCircle
 } from "lucide-react";
-import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const StatsPanel = () => {
   const [stats, setStats] = useState({
@@ -101,7 +101,7 @@ const StatsPanel = () => {
     const generateRealisticCrowdData = () => {
       const data = [];
       const now = new Date();
-      const currentHour = now.getHours();
+      // const currentHour = now.getHours(); // Removed unused variable
       
       for (let i = 23; i >= 0; i--) {
         const time = new Date(now.getTime() - i * 60 * 60 * 1000);

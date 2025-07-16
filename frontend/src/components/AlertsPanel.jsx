@@ -5,25 +5,14 @@ import {
   AlertTriangle, 
   AlertCircle,
   CheckCircle,
-  XCircle,
   Clock,
   MapPin,
   Users,
-  Zap,
-  Eye,
-  EyeOff,
-  Filter,
   Search,
-  Bell,
-  BellOff,
   Volume2,
   VolumeX,
   RefreshCw,
-  TrendingUp,
   Activity,
-  Gauge,
-  Target,
-  Radio,
   Wifi,
   WifiOff
 } from "lucide-react";
@@ -162,7 +151,7 @@ const AlertsPanel = () => {
     };
 
     fetchAlerts();
-  }, []);
+  }, [mockAlerts]);
 
   useEffect(() => {
     filterAlerts();

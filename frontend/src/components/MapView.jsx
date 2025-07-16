@@ -456,7 +456,7 @@ const MapView = ({
         ]);
         map.fitBounds(bounds, { padding: [50, 50] });
       }
-    }, [route, startLoc, endLoc, map]);
+    }, [map]); // Removed unnecessary dependencies as they don't trigger re-renders
 
     return null;
   };

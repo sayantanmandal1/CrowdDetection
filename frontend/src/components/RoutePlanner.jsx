@@ -15,7 +15,6 @@ import {
   Target,
   Activity,
   Gauge,
-  Bus,
   Crown,
   Brain,
   UserCheck
@@ -68,7 +67,7 @@ const RoutePlanner = ({ onRouteFound, onStartChange, onEndChange, currentLocatio
   ];
 
   const [availableLocations, setAvailableLocations] = useState([]);
-  const [nearbyLocations, setNearbyLocations] = useState([]);
+  const [, setNearbyLocations] = useState([]);
   const [userType, setUserType] = useState("general"); // general, elderly, divyangjan, vip
   const [weatherConditions, setWeatherConditions] = useState(null);
 
@@ -435,7 +434,7 @@ const RoutePlanner = ({ onRouteFound, onStartChange, onEndChange, currentLocatio
     if (startLocation && endLocation && startLocation !== endLocation) {
       generateRouteOptionsCallback();
     }
-  }, [startLocation, endLocation, routeType, preferences, userType, generateRouteOptionsCallback]);
+  }, [startLocation, endLocation, routeType, preferences, userType, generateRouteOptionsCallback, generateFallbackRoutes]);
 
   const generateRouteOptions = async () => {
     setIsCalculating(true);

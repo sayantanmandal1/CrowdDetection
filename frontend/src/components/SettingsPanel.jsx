@@ -2,22 +2,14 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { 
   Settings, 
-  Moon, 
-  Sun, 
   Bell, 
   Shield, 
-  Map, 
   Users, 
-  Volume2, 
-  VolumeX,
-  Smartphone,
   Monitor,
   Palette,
-  Globe,
   Save,
   RotateCcw,
-  Download,
-  Upload
+  Download
 } from "lucide-react";
 
 const SettingsPanel = ({ darkMode, onDarkModeToggle }) => {
