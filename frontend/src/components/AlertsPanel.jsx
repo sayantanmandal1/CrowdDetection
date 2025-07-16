@@ -122,8 +122,46 @@ const AlertsPanel = () => {
   ];
 
   useEffect(() => {
-    setAlerts(mockAlerts);
-    updateAlertStats(mockAlerts);
+    // Fetch real-time alerts from sophisticated backend
+    const fetchAlerts = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/alerts/current');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.alerts && data.alerts.length > 0) {
+            const formattedAlerts = data.alerts.map(alert => ({
+              id: alert.id,
+              type: alert.severity,
+              title: alert.message.split(':')[1] || alert.message,
+              message: alert.message,
+              location: alert.location_name,
+              timestamp: new Date(alert.timestamp),
+              status: alert.status,
+              priority: alert.severity,
+              affectedUsers: alert.affected_count,
+              estimatedDuration: alert.estimated_response_time,
+              actions: alert.actions_taken || ['Monitoring situation', 'Response team notified']
+            }));
+            
+            setAlerts(formattedAlerts);
+            updateAlertStats(formattedAlerts);
+          } else {
+            // Use enhanced mock data if no alerts from backend
+            setAlerts(mockAlerts);
+            updateAlertStats(mockAlerts);
+          }
+        } else {
+          setAlerts(mockAlerts);
+          updateAlertStats(mockAlerts);
+        }
+      } catch (error) {
+        console.log('Using enhanced mock alerts data');
+        setAlerts(mockAlerts);
+        updateAlertStats(mockAlerts);
+      }
+    };
+
+    fetchAlerts();
   }, []);
 
   useEffect(() => {
@@ -474,7 +512,7 @@ const AlertsPanel = () => {
         )}
       </motion.div>
 
-      <style jsx>{`
+      <style>{`
         .alerts-panel-premium {
           display: flex;
           flex-direction: column;

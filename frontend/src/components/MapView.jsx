@@ -261,7 +261,7 @@ const MapView = ({
         </div>
       </motion.div>
 
-      <style jsx>{`
+      <style>{`
         .map-legend {
           position: absolute;
           bottom: 2rem;
