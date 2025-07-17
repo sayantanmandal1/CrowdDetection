@@ -455,16 +455,15 @@ function MapPage() {
 
       {/* Enhanced Map View with AI Features */}
       <MapView
+        currentLocation={currentLocation}
+        setCurrentLocation={setCurrentLocation}
+        destination={endLoc}
+        setDestination={setEndLoc}
         route={route}
-        startLoc={startLoc}
-        endLoc={endLoc}
-        showAccessible={showAccessible}
-        showTransport={showTransport}
-        showAlerts={showAlerts}
-        showVIP={showVIP}
-        darkMode={darkMode}
-        onLocationUpdate={handleLocationUpdate}
         onCurrentLocationSet={handleCurrentLocationSet}
+        onDestinationSet={(location) => setEndLoc(location)}
+        showLegend={true}
+        className=""
       />
 
       {/* Overlay Controls */}
