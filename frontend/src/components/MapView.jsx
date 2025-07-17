@@ -46,11 +46,39 @@ const createCustomIcon = (color, icon, size = 30, pulse = false) => {
   });
 };
 
-// Draggable marker component with enhanced features
+// Draggable marker component with debounced notifications
 const DraggableMarker = ({ position, setPosition, icon, popupContent, onDragEnd }) => {
   const markerRef = useRef(null);
+  const dragTimeoutRef = useRef(null);
+  const isDraggingRef = useRef(false);
+  const hasShownDragStartRef = useRef(false);
   
   const eventHandlers = {
+    dragstart() {
+      isDraggingRef.current = true;
+      
+      // Only show drag start notification once per drag session
+      if (!hasShownDragStartRef.current) {
+        toast.info("🔄 Drag to adjust location", {
+          position: "top-right",
+          autoClose: 1500,
+        });
+        hasShownDragStartRef.current = true;
+      }
+      
+      // Clear any existing timeout
+      if (dragTimeoutRef.current) {
+        clearTimeout(dragTimeoutRef.current);
+      }
+    },
+    
+    drag() {
+      // Clear previous timeout on each drag movement
+      if (dragTimeoutRef.current) {
+        clearTimeout(dragTimeoutRef.current);
+      }
+    },
+    
     dragend() {
       const marker = markerRef.current;
       if (marker != null) {
@@ -59,19 +87,30 @@ const DraggableMarker = ({ position, setPosition, icon, popupContent, onDragEnd 
         if (onDragEnd) {
           onDragEnd(newPos);
         }
-        toast.info("📍 Location updated! Recalculating route...", {
-          position: "top-right",
-          autoClose: 2000,
-        });
+        
+        // Set a timeout to show completion notification after user stops dragging
+        dragTimeoutRef.current = setTimeout(() => {
+          if (!isDraggingRef.current) {
+            toast.success("📍 Location updated! Recalculating route...", {
+              position: "top-right",
+              autoClose: 2000,
+            });
+          }
+          isDraggingRef.current = false;
+          hasShownDragStartRef.current = false;
+        }, 500); // Wait 500ms after drag ends to ensure user is done
       }
-    },
-    dragstart() {
-      toast.info("🔄 Drag to adjust location", {
-        position: "top-right",
-        autoClose: 1000,
-      });
     }
   };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (dragTimeoutRef.current) {
+        clearTimeout(dragTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <Marker
@@ -88,65 +127,134 @@ const DraggableMarker = ({ position, setPosition, icon, popupContent, onDragEnd 
   );
 };
 
-// Current location finder with enhanced accuracy
+// Stable current location finder with GPS smoothing
 const LocationFinder = ({ setCurrentLocation, onLocationFound }) => {
   const map = useMap();
+  const [isLocationSet, setIsLocationSet] = useState(false);
+  const [watchId, setWatchId] = useState(null);
+  const lastLocationRef = useRef(null);
   
   useEffect(() => {
+    let mounted = true;
+    
+    const calculateDistance = (lat1, lng1, lat2, lng2) => {
+      const R = 6371000; // Earth's radius in meters
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLng = (lng2 - lng1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLng/2) * Math.sin(dLng/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    };
+
+    const setStableLocation = (location, isDemo = false) => {
+      if (!mounted) return;
+      
+      // Only update if location has changed significantly (more than 10 meters)
+      if (lastLocationRef.current) {
+        const distance = calculateDistance(
+          lastLocationRef.current.lat, lastLocationRef.current.lng,
+          location.lat, location.lng
+        );
+        
+        // If the change is less than 10 meters, don't update to prevent glitching
+        if (distance < 10 && !isDemo) {
+          return;
+        }
+      }
+      
+      lastLocationRef.current = location;
+      setCurrentLocation(location);
+      
+      if (!isLocationSet) {
+        map.setView([location.lat, location.lng], 16);
+        setIsLocationSet(true);
+        
+        if (isDemo) {
+          toast.success("📍 Demo location set in Ujjain for Simhastha 2028!", {
+            position: "top-right",
+            autoClose: 3000,
+          });
+        } else {
+          toast.success(`📍 Location found! Accuracy: ${Math.round(location.accuracy)}m`, {
+            position: "top-right",
+            autoClose: 3000,
+          });
+        }
+      }
+      
+      if (onLocationFound) onLocationFound(location);
+    };
+
     const findLocation = () => {
       if (navigator.geolocation) {
+        // First, get current position
         navigator.geolocation.getCurrentPosition(
           (position) => {
-            const { latitude, longitude, accuracy } = position.coords;
-            const newLocation = {
-              lat: latitude,
-              lng: longitude,
-              accuracy: accuracy
-            };
+            if (!mounted) return;
             
-            // Check if we're reasonably close to Ujjain (within 100km for demo)
+            const { latitude, longitude, accuracy } = position.coords;
             const ujjainCoords = { lat: 23.1765, lng: 75.7885 };
-            const distance = map.distance([latitude, longitude], [ujjainCoords.lat, ujjainCoords.lng]) / 1000;
+            const distance = calculateDistance(latitude, longitude, ujjainCoords.lat, ujjainCoords.lng) / 1000;
             
             if (distance > 100) {
-              // For demo purposes, place user in Ujjain
+              // Use fixed demo location in Ujjain (no random coordinates)
               const demoLocation = {
-                lat: ujjainCoords.lat + (Math.random() - 0.5) * 0.01,
-                lng: ujjainCoords.lng + (Math.random() - 0.5) * 0.01,
+                lat: 23.1765,  // Fixed coordinates
+                lng: 75.7885,  // Fixed coordinates
                 accuracy: 10
               };
-              setCurrentLocation(demoLocation);
-              map.setView([demoLocation.lat, demoLocation.lng], 16);
-              toast.success("📍 Demo location set in Ujjain for Simhastha 2028!", {
-                position: "top-right",
-                autoClose: 3000,
-              });
-              if (onLocationFound) onLocationFound(demoLocation);
+              setStableLocation(demoLocation, true);
             } else {
-              setCurrentLocation(newLocation);
-              map.setView([latitude, longitude], 16);
-              toast.success(`📍 Location found! Accuracy: ${Math.round(accuracy)}m`, {
-                position: "top-right",
-                autoClose: 3000,
-              });
-              if (onLocationFound) onLocationFound(newLocation);
+              // Use actual GPS location
+              const newLocation = {
+                lat: latitude,
+                lng: longitude,
+                accuracy: accuracy
+              };
+              setStableLocation(newLocation, false);
+              
+              // Set up location watching for real GPS (but with filtering)
+              const id = navigator.geolocation.watchPosition(
+                (pos) => {
+                  if (!mounted) return;
+                  
+                  const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords;
+                  
+                  // Only update if accuracy is good (less than 50 meters) and position changed significantly
+                  if (acc < 50) {
+                    const updatedLocation = {
+                      lat: lat,
+                      lng: lng,
+                      accuracy: acc
+                    };
+                    setStableLocation(updatedLocation, false);
+                  }
+                },
+                (error) => {
+                  console.warn("Location watch error:", error);
+                },
+                {
+                  enableHighAccuracy: true,
+                  timeout: 15000,
+                  maximumAge: 60000 // 1 minute
+                }
+              );
+              setWatchId(id);
             }
           },
           (error) => {
+            if (!mounted) return;
+            
             console.warn("Geolocation error:", error);
-            // Fallback to demo location in Ujjain
+            // Use fixed demo location in Ujjain (no random coordinates)
             const ujjainCoords = { 
-              lat: 23.1765 + (Math.random() - 0.5) * 0.01, 
-              lng: 75.7885 + (Math.random() - 0.5) * 0.01, 
+              lat: 23.1765,  // Fixed coordinates
+              lng: 75.7885,  // Fixed coordinates
               accuracy: 10 
             };
-            setCurrentLocation(ujjainCoords);
-            map.setView([ujjainCoords.lat, ujjainCoords.lng], 15);
-            toast.info("📍 Using demo location in Ujjain for Simhastha 2028", {
-              position: "top-right",
-              autoClose: 3000,
-            });
-            if (onLocationFound) onLocationFound(ujjainCoords);
+            setStableLocation(ujjainCoords, true);
           },
           {
             enableHighAccuracy: true,
@@ -155,38 +263,48 @@ const LocationFinder = ({ setCurrentLocation, onLocationFound }) => {
           }
         );
       } else {
-        // Geolocation not supported, use demo location
+        // Geolocation not supported, use fixed demo location
         const ujjainCoords = { 
-          lat: 23.1765 + (Math.random() - 0.5) * 0.01, 
-          lng: 75.7885 + (Math.random() - 0.5) * 0.01, 
+          lat: 23.1765,  // Fixed coordinates
+          lng: 75.7885,  // Fixed coordinates
           accuracy: 10 
         };
-        setCurrentLocation(ujjainCoords);
-        map.setView([ujjainCoords.lat, ujjainCoords.lng], 15);
-        toast.info("📍 Using demo location in Ujjain", {
-          position: "top-right",
-          autoClose: 3000,
-        });
-        if (onLocationFound) onLocationFound(ujjainCoords);
+        setStableLocation(ujjainCoords, true);
       }
     };
 
     findLocation();
-  }, [map, setCurrentLocation, onLocationFound]);
+
+    // Cleanup function
+    return () => {
+      mounted = false;
+      if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, [map, setCurrentLocation, onLocationFound, isLocationSet, watchId]);
 
   return null;
 };
 
-// Map click handler for setting destinations
+// Map click handler for setting destinations with throttled notifications
 const MapClickHandler = ({ onMapClick, isSelectingDestination }) => {
+  const lastNotificationRef = useRef(0);
+  
   useMapEvents({
     click: (e) => {
       if (isSelectingDestination && onMapClick) {
         onMapClick(e.latlng);
-        toast.success("🎯 Destination set! Calculating route...", {
-          position: "top-right",
-          autoClose: 2000,
-        });
+        
+        // Throttle notifications - only show if 2 seconds have passed since last notification
+        const now = Date.now();
+        if (now - lastNotificationRef.current > 2000) {
+          toast.success("🎯 Destination set! Calculating route...", {
+            position: "top-right",
+            autoClose: 2000,
+          });
+          lastNotificationRef.current = now;
+        }
       }
     },
   });
