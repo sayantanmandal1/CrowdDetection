@@ -168,15 +168,62 @@ const RoutePlanner = ({ onRouteFound, onStartChange, onEndChange, currentLocatio
     fetchAIInsights();
   }, []);
 
+  // Generate enhanced fallback routes
+  const generateFallbackRoutes = useCallback(() => {
+    const startCoords = currentLocation || { lat: 23.1765, lng: 75.7885 };
+    const endCoords = { lat: 23.1828, lng: 75.7681 }; // Mahakaleshwar Temple
+    
+    // Calculate realistic distance
+    const getDistance = (lat1, lon1, lat2, lon2) => {
+      const R = 6371; // Earth's radius in km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    };
+
+    const distance = getDistance(startCoords.lat, startCoords.lng, endCoords.lat, endCoords.lng);
+    
+    return [
+      {
+        id: "ai_route_001",
+        name: "🤖 AI-Optimized Route",
+        distance: `${distance.toFixed(2)} km`,
+        duration: `${Math.round(distance * 12)}m`,
+        crowdLevel: userType === 'vip' ? 15 : 35,
+        safetyScore: userType === 'divyangjan' || userType === 'elderly' ? 98 : 95,
+        accessibilityScore: userType === 'divyangjan' ? 100 : userType === 'elderly' ? 95 : 85,
+        difficulty: userType === 'divyangjan' || userType === 'elderly' ? "Easy" : "Moderate",
+        highlights: [
+          "🧠 AI-powered pathfinding",
+          "📊 Real-time crowd analysis",
+          "🛡️ Safety-first routing"
+        ],
+        warnings: [],
+        waypoints: [
+          { lat: startCoords.lat, lng: startCoords.lng, name: startLocation === "My Current Location" ? "My Location" : startLocation.split(' - ')[0] },
+          { lat: (startCoords.lat + endCoords.lat) / 2, lng: (startCoords.lng + endCoords.lng) / 2, name: "🤖 AI Checkpoint" },
+          { lat: endCoords.lat, lng: endCoords.lng, name: endLocation.split(' - ')[0] }
+        ],
+        instructions: [
+          `🚀 Start from ${startLocation === "My Current Location" ? "your location" : startLocation.split(' - ')[0]}`,
+          "🎯 Follow AI-optimized path with real-time updates",
+          "✅ Arrive at destination with minimal crowd exposure"
+        ],
+        aiConfidence: 0.94
+      }
+    ];
+  }, [startLocation, endLocation, currentLocation, userType]);
+
   const generateRouteOptionsCallback = useCallback(async () => {
     setIsCalculating(true);
     
     try {
-      // Prepare user profile
-      const userProfile = {
-        user_type: userType,
-        accessibility_needs: preferences.accessibleRoute || userType === 'divyangjan' || userType === 'elderly'
-      };
+      // User profile is prepared inline in the request body
 
       // Call the sophisticated backend API
       const response = await fetch('http://localhost:8000/routes/calculate', {
@@ -290,145 +337,9 @@ const RoutePlanner = ({ onRouteFound, onStartChange, onEndChange, currentLocatio
     }
     
     setIsCalculating(false);
-  }, [startLocation, endLocation, routeType, preferences, userType, currentLocation, onRouteFound, onStartChange, onEndChange]);
+  }, [startLocation, endLocation, routeType, preferences, userType, currentLocation, onRouteFound, onStartChange, onEndChange, generateFallbackRoutes]);
 
-  // Generate enhanced fallback routes
-  const generateFallbackRoutes = useCallback(() => {
-    const startCoords = currentLocation || { lat: 23.1765, lng: 75.7885 };
-    const endCoords = { lat: 23.1828, lng: 75.7681 }; // Mahakaleshwar Temple
-    
-    // Calculate realistic distance
-    const getDistance = (lat1, lon1, lat2, lon2) => {
-      const R = 6371; // Earth's radius in km
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = 
-        Math.sin(dLat/2) * Math.sin(dLat/2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-        Math.sin(dLon/2) * Math.sin(dLon/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      return R * c;
-    };
 
-    const distance = getDistance(startCoords.lat, startCoords.lng, endCoords.lat, endCoords.lng);
-    
-    const routes = [
-      {
-        id: "ai_route_001",
-        name: "🤖 AI-Optimized Route",
-        distance: `${distance.toFixed(2)} km`,
-        duration: `${Math.round(distance * 12)}m`,
-        crowdLevel: userType === 'vip' ? 15 : 35,
-        safetyScore: userType === 'divyangjan' || userType === 'elderly' ? 98 : 95,
-        accessibilityScore: userType === 'divyangjan' ? 100 : userType === 'elderly' ? 95 : 85,
-        difficulty: userType === 'divyangjan' || userType === 'elderly' ? "Easy" : "Moderate",
-        highlights: [
-          "🧠 AI-powered pathfinding",
-          "📊 Real-time crowd analysis",
-          "🛡️ Safety-first routing",
-          userType === 'divyangjan' ? "♿ Fully accessible" : "🚶 Pedestrian-friendly"
-        ],
-        warnings: [],
-        waypoints: [
-          { lat: startCoords.lat, lng: startCoords.lng, name: startLocation === "My Current Location" ? "My Location" : startLocation.split(' - ')[0] },
-          { lat: (startCoords.lat + endCoords.lat) / 2, lng: (startCoords.lng + endCoords.lng) / 2, name: "🤖 AI Checkpoint" },
-          { lat: endCoords.lat, lng: endCoords.lng, name: endLocation.split(' - ')[0] }
-        ],
-        instructions: [
-          `🚀 Start from ${startLocation === "My Current Location" ? "your location" : startLocation.split(' - ')[0]}`,
-          "🎯 Follow AI-optimized path with real-time updates",
-          "✅ Arrive at destination with minimal crowd exposure"
-        ],
-        aiConfidence: 0.94,
-        healthBenefits: {
-          calories_burned: Math.round(distance * 50),
-          steps: Math.round(distance * 1300),
-          exercise_time: Math.round(distance * 12),
-          health_score: Math.min(100, Math.round(distance * 20))
-        },
-        alternativeOptions: [
-          `🛺 E-Rickshaw - ₹${Math.round(distance * 30)}, ${Math.round(distance * 3)}min`,
-          "🚌 Shuttle Service - ₹10, includes guide"
-        ]
-      }
-    ];
-
-    // Add additional routes based on preferences
-    if (routeType === 'fastest' || preferences.fastestRoute) {
-      routes.push({
-        id: "express_route_001",
-        name: "⚡ Express Route",
-        distance: `${(distance * 0.9).toFixed(2)} km`,
-        duration: `${Math.round(distance * 8)}m`,
-        crowdLevel: 75,
-        safetyScore: 82,
-        accessibilityScore: 75,
-        difficulty: "Moderate",
-        highlights: ["⚡ Fastest available path", "🎯 Direct connection"],
-        warnings: ["⚠️ Higher crowd density expected"],
-        waypoints: [
-          { lat: startCoords.lat, lng: startCoords.lng, name: startLocation === "My Current Location" ? "My Location" : startLocation.split(' - ')[0] },
-          { lat: endCoords.lat, lng: endCoords.lng, name: endLocation.split(' - ')[0] }
-        ],
-        instructions: [
-          "🏃 Take direct path for fastest arrival",
-          "⚠️ Navigate through busy areas with caution"
-        ],
-        aiConfidence: 0.88,
-        healthBenefits: {
-          calories_burned: Math.round(distance * 45),
-          steps: Math.round(distance * 1200),
-          exercise_time: Math.round(distance * 8),
-          health_score: Math.min(100, Math.round(distance * 18))
-        },
-        alternativeOptions: ["🚕 Taxi - ₹" + Math.round(distance * 50)]
-      });
-    }
-
-    if (userType === 'divyangjan' || userType === 'elderly' || preferences.accessibleRoute) {
-      routes.push({
-        id: "accessible_route_001",
-        name: "♿ Universal Access Route",
-        distance: `${(distance * 1.3).toFixed(2)} km`,
-        duration: `${Math.round(distance * 18)}m`,
-        crowdLevel: 20,
-        safetyScore: 99,
-        accessibilityScore: 100,
-        difficulty: "Very Easy",
-        highlights: [
-          "♿ 100% wheelchair accessible",
-          "🛗 Ramps and smooth surfaces",
-          "👨‍⚕️ Medical support nearby",
-          "🪑 Rest areas every 200m"
-        ],
-        warnings: [],
-        waypoints: [
-          { lat: startCoords.lat, lng: startCoords.lng, name: startLocation === "My Current Location" ? "My Location" : startLocation.split(' - ')[0] },
-          { lat: startCoords.lat + 0.002, lng: startCoords.lng + 0.002, name: "♿ Accessible Rest Point 1" },
-          { lat: startCoords.lat + 0.004, lng: startCoords.lng + 0.004, name: "♿ Accessible Rest Point 2" },
-          { lat: endCoords.lat, lng: endCoords.lng, name: endLocation.split(' - ')[0] }
-        ],
-        instructions: [
-          "♿ Follow fully accessible path with assistance points",
-          "🛗 Use ramps and accessible facilities",
-          "👨‍⚕️ Medical support available at each checkpoint"
-        ],
-        aiConfidence: 0.98,
-        healthBenefits: {
-          calories_burned: Math.round(distance * 35),
-          steps: Math.round(distance * 1000),
-          exercise_time: Math.round(distance * 18),
-          health_score: Math.min(100, Math.round(distance * 15))
-        },
-        alternativeOptions: [
-          "🦽 Wheelchair assistance - Free",
-          "👨‍⚕️ Medical escort - Available on request"
-        ]
-      });
-    }
-
-    return routes;
-  }, [startLocation, endLocation, currentLocation, userType, routeType, preferences]);
 
   useEffect(() => {
     if (startLocation && endLocation && startLocation !== endLocation) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Shield, 
@@ -42,77 +42,77 @@ const AlertsPanel = () => {
     { id: 'resolved', label: 'Resolved', icon: CheckCircle, color: '#43e97b' }
   ];
 
-  const mockAlerts = [
-    {
-      id: 1,
-      type: 'critical',
-      title: 'High Crowd Density Alert',
-      message: 'Extremely high crowd density detected at Main Ghat. Immediate action required.',
-      location: 'Main Ghat - Sector A',
-      timestamp: new Date(Date.now() - 5 * 60000),
-      status: 'active',
-      priority: 'high',
-      affectedUsers: 2500,
-      estimatedDuration: '30-45 minutes',
-      actions: ['Redirect traffic', 'Deploy additional security', 'Activate emergency protocols']
-    },
-    {
-      id: 2,
-      type: 'warning',
-      title: 'Weather Advisory',
-      message: 'Light rain expected in the next 30 minutes. Prepare for slippery conditions.',
-      location: 'All Areas',
-      timestamp: new Date(Date.now() - 15 * 60000),
-      status: 'active',
-      priority: 'medium',
-      affectedUsers: 8000,
-      estimatedDuration: '2-3 hours',
-      actions: ['Issue weather warnings', 'Prepare shelters', 'Monitor conditions']
-    },
-    {
-      id: 3,
-      type: 'info',
-      title: 'Transport Update',
-      message: 'Additional shuttle services deployed to Transport Hub B.',
-      location: 'Transport Hub B',
-      timestamp: new Date(Date.now() - 25 * 60000),
-      status: 'active',
-      priority: 'low',
-      affectedUsers: 500,
-      estimatedDuration: 'Ongoing',
-      actions: ['Update signage', 'Inform passengers', 'Monitor capacity']
-    },
-    {
-      id: 4,
-      type: 'critical',
-      title: 'Medical Emergency',
-      message: 'Medical emergency reported at Temple Complex. Emergency services dispatched.',
-      location: 'Temple Complex - East Wing',
-      timestamp: new Date(Date.now() - 35 * 60000),
-      status: 'resolving',
-      priority: 'high',
-      affectedUsers: 100,
-      estimatedDuration: '15-20 minutes',
-      actions: ['Medical team deployed', 'Clear access routes', 'Crowd control']
-    },
-    {
-      id: 5,
-      type: 'resolved',
-      title: 'Route Blockage Cleared',
-      message: 'Temporary blockage on Route 3 has been cleared. Normal traffic resumed.',
-      location: 'Route 3 - Junction Point',
-      timestamp: new Date(Date.now() - 45 * 60000),
-      status: 'resolved',
-      priority: 'medium',
-      affectedUsers: 1200,
-      estimatedDuration: 'Resolved',
-      actions: ['Route reopened', 'Traffic normalized', 'Monitoring continues']
-    }
-  ];
-
   useEffect(() => {
     // Fetch real-time alerts from sophisticated backend
     const fetchAlerts = async () => {
+      const mockAlerts = [
+        {
+          id: 1,
+          type: 'critical',
+          title: 'High Crowd Density Alert',
+          message: 'Extremely high crowd density detected at Main Ghat. Immediate action required.',
+          location: 'Main Ghat - Sector A',
+          timestamp: new Date(Date.now() - 5 * 60000),
+          status: 'active',
+          priority: 'high',
+          affectedUsers: 2500,
+          estimatedDuration: '30-45 minutes',
+          actions: ['Redirect traffic', 'Deploy additional security', 'Activate emergency protocols']
+        },
+        {
+          id: 2,
+          type: 'warning',
+          title: 'Weather Advisory',
+          message: 'Light rain expected in the next 30 minutes. Prepare for slippery conditions.',
+          location: 'All Areas',
+          timestamp: new Date(Date.now() - 15 * 60000),
+          status: 'active',
+          priority: 'medium',
+          affectedUsers: 8000,
+          estimatedDuration: '2-3 hours',
+          actions: ['Issue weather warnings', 'Prepare shelters', 'Monitor conditions']
+        },
+        {
+          id: 3,
+          type: 'info',
+          title: 'Transport Update',
+          message: 'Additional shuttle services deployed to Transport Hub B.',
+          location: 'Transport Hub B',
+          timestamp: new Date(Date.now() - 25 * 60000),
+          status: 'active',
+          priority: 'low',
+          affectedUsers: 500,
+          estimatedDuration: 'Ongoing',
+          actions: ['Update signage', 'Inform passengers', 'Monitor capacity']
+        },
+        {
+          id: 4,
+          type: 'critical',
+          title: 'Medical Emergency',
+          message: 'Medical emergency reported at Temple Complex. Emergency services dispatched.',
+          location: 'Temple Complex - East Wing',
+          timestamp: new Date(Date.now() - 35 * 60000),
+          status: 'resolving',
+          priority: 'high',
+          affectedUsers: 100,
+          estimatedDuration: '15-20 minutes',
+          actions: ['Medical team deployed', 'Clear access routes', 'Crowd control']
+        },
+        {
+          id: 5,
+          type: 'resolved',
+          title: 'Route Blockage Cleared',
+          message: 'Temporary blockage on Route 3 has been cleared. Normal traffic resumed.',
+          location: 'Route 3 - Junction Point',
+          timestamp: new Date(Date.now() - 45 * 60000),
+          status: 'resolved',
+          priority: 'medium',
+          affectedUsers: 1200,
+          estimatedDuration: 'Resolved',
+          actions: ['Route reopened', 'Traffic normalized', 'Monitoring continues']
+        }
+      ];
+
       try {
         const response = await fetch('http://localhost:8000/alerts/current');
         if (response.ok) {
@@ -151,11 +151,29 @@ const AlertsPanel = () => {
     };
 
     fetchAlerts();
-  }, [mockAlerts]);
+  }, []);
+
+  const filterAlerts = useCallback(() => {
+    let filtered = alerts;
+
+    if (activeFilter !== 'all') {
+      filtered = filtered.filter(alert => alert.type === activeFilter);
+    }
+
+    if (searchTerm) {
+      filtered = filtered.filter(alert =>
+        alert.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        alert.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        alert.message.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    setFilteredAlerts(filtered);
+  }, [alerts, activeFilter, searchTerm]);
 
   useEffect(() => {
     filterAlerts();
-  }, [alerts, activeFilter, searchTerm]);
+  }, [alerts, activeFilter, searchTerm, filterAlerts]);
 
   useEffect(() => {
     if (autoRefresh) {
@@ -216,24 +234,6 @@ const AlertsPanel = () => {
     }, { total: 0, critical: 0, warning: 0, info: 0, resolved: 0 });
     
     setAlertStats(stats);
-  };
-
-  const filterAlerts = () => {
-    let filtered = alerts;
-
-    if (activeFilter !== 'all') {
-      filtered = filtered.filter(alert => alert.type === activeFilter);
-    }
-
-    if (searchTerm) {
-      filtered = filtered.filter(alert =>
-        alert.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        alert.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        alert.message.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    setFilteredAlerts(filtered);
   };
 
   const getAlertIcon = (type, status) => {

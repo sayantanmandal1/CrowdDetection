@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
-import { motion, AnimatePresence } from 'framer-motion';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { toast } from 'react-toastify';
+import notificationManager from '../utils/NotificationManager';
 
 // Fix for default markers
 delete L.Icon.Default.prototype._getIconUrl;
@@ -46,37 +45,17 @@ const createCustomIcon = (color, icon, size = 30, pulse = false) => {
   });
 };
 
-// Draggable marker component with debounced notifications
+// Draggable marker component with strict notification management
 const DraggableMarker = ({ position, setPosition, icon, popupContent, onDragEnd }) => {
   const markerRef = useRef(null);
-  const dragTimeoutRef = useRef(null);
-  const isDraggingRef = useRef(false);
-  const hasShownDragStartRef = useRef(false);
   
   const eventHandlers = {
     dragstart() {
-      isDraggingRef.current = true;
-      
-      // Only show drag start notification once per drag session
-      if (!hasShownDragStartRef.current) {
-        toast.info("🔄 Drag to adjust location", {
-          position: "top-right",
-          autoClose: 1500,
-        });
-        hasShownDragStartRef.current = true;
-      }
-      
-      // Clear any existing timeout
-      if (dragTimeoutRef.current) {
-        clearTimeout(dragTimeoutRef.current);
-      }
-    },
-    
-    drag() {
-      // Clear previous timeout on each drag movement
-      if (dragTimeoutRef.current) {
-        clearTimeout(dragTimeoutRef.current);
-      }
+      notificationManager.show(
+        'marker-drag-start',
+        "🔄 Drag to adjust location", 
+        { type: 'info', autoClose: 1500 }
+      );
     },
     
     dragend() {
@@ -88,30 +67,17 @@ const DraggableMarker = ({ position, setPosition, icon, popupContent, onDragEnd 
           onDragEnd(newPos);
         }
         
-        // Set a timeout to show completion notification after user stops dragging
-        dragTimeoutRef.current = setTimeout(() => {
-          if (!isDraggingRef.current) {
-            toast.success("📍 Location updated! Recalculating route...", {
-              position: "top-right",
-              autoClose: 2000,
-            });
-          }
-          isDraggingRef.current = false;
-          hasShownDragStartRef.current = false;
-        }, 500); // Wait 500ms after drag ends to ensure user is done
+        setTimeout(() => {
+          notificationManager.show(
+            'marker-drag-end',
+            "📍 Location updated! Recalculating route...", 
+            { type: 'success', autoClose: 2000 }
+          );
+        }, 500);
       }
     }
   };
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (dragTimeoutRef.current) {
-        clearTimeout(dragTimeoutRef.current);
-      }
-    };
-  }, []);
-
+  
   return (
     <Marker
       draggable={true}
@@ -127,403 +93,106 @@ const DraggableMarker = ({ position, setPosition, icon, popupContent, onDragEnd 
   );
 };
 
-// Stable current location finder with GPS smoothing
+// Location finder component
 const LocationFinder = ({ setCurrentLocation, onLocationFound }) => {
   const map = useMap();
   const [isLocationSet, setIsLocationSet] = useState(false);
-  const [watchId, setWatchId] = useState(null);
-  const lastLocationRef = useRef(null);
-  
+
   useEffect(() => {
-    let mounted = true;
-    
-    const calculateDistance = (lat1, lng1, lat2, lng2) => {
-      const R = 6371000; // Earth's radius in meters
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLng = (lng2 - lng1) * Math.PI / 180;
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                Math.sin(dLng/2) * Math.sin(dLng/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      return R * c;
-    };
-
-    const setStableLocation = (location, isDemo = false) => {
-      if (!mounted) return;
-      
-      // Only update if location has changed significantly (more than 10 meters)
-      if (lastLocationRef.current) {
-        const distance = calculateDistance(
-          lastLocationRef.current.lat, lastLocationRef.current.lng,
-          location.lat, location.lng
-        );
-        
-        // If the change is less than 10 meters, don't update to prevent glitching
-        if (distance < 10 && !isDemo) {
-          return;
-        }
-      }
-      
-      lastLocationRef.current = location;
-      setCurrentLocation(location);
-      
-      if (!isLocationSet) {
-        map.setView([location.lat, location.lng], 16);
-        setIsLocationSet(true);
-        
-        if (isDemo) {
-          toast.success("📍 Demo location set in Ujjain for Simhastha 2028!", {
-            position: "top-right",
-            autoClose: 3000,
-          });
-        } else {
-          toast.success(`📍 Location found! Accuracy: ${Math.round(location.accuracy)}m`, {
-            position: "top-right",
-            autoClose: 3000,
-          });
-        }
-      }
-      
-      if (onLocationFound) onLocationFound(location);
-    };
-
-    const findLocation = () => {
-      if (navigator.geolocation) {
-        // First, get current position
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            if (!mounted) return;
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const location = { lat: latitude, lng: longitude, accuracy: position.coords.accuracy };
+          
+          setCurrentLocation(location);
+          if (!isLocationSet) {
+            map.setView([latitude, longitude], 16);
+            setIsLocationSet(true);
             
-            const { latitude, longitude, accuracy } = position.coords;
-            const ujjainCoords = { lat: 23.1765, lng: 75.7885 };
-            const distance = calculateDistance(latitude, longitude, ujjainCoords.lat, ujjainCoords.lng) / 1000;
-            
-            if (distance > 100) {
-              // Use fixed demo location in Ujjain (no random coordinates)
-              const demoLocation = {
-                lat: 23.1765,  // Fixed coordinates
-                lng: 75.7885,  // Fixed coordinates
-                accuracy: 10
-              };
-              setStableLocation(demoLocation, true);
-            } else {
-              // Use actual GPS location
-              const newLocation = {
-                lat: latitude,
-                lng: longitude,
-                accuracy: accuracy
-              };
-              setStableLocation(newLocation, false);
-              
-              // Set up location watching for real GPS (but with filtering)
-              const id = navigator.geolocation.watchPosition(
-                (pos) => {
-                  if (!mounted) return;
-                  
-                  const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords;
-                  
-                  // Only update if accuracy is good (less than 50 meters) and position changed significantly
-                  if (acc < 50) {
-                    const updatedLocation = {
-                      lat: lat,
-                      lng: lng,
-                      accuracy: acc
-                    };
-                    setStableLocation(updatedLocation, false);
-                  }
-                },
-                (error) => {
-                  console.warn("Location watch error:", error);
-                },
-                {
-                  enableHighAccuracy: true,
-                  timeout: 15000,
-                  maximumAge: 60000 // 1 minute
-                }
-              );
-              setWatchId(id);
-            }
-          },
-          (error) => {
-            if (!mounted) return;
-            
-            console.warn("Geolocation error:", error);
-            // Use fixed demo location in Ujjain (no random coordinates)
-            const ujjainCoords = { 
-              lat: 23.1765,  // Fixed coordinates
-              lng: 75.7885,  // Fixed coordinates
-              accuracy: 10 
-            };
-            setStableLocation(ujjainCoords, true);
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 300000 // 5 minutes
+            notificationManager.show(
+              'location-found',
+              `📍 Location found! Accuracy: ${Math.round(position.coords.accuracy)}m`, 
+              { type: 'success', autoClose: 3000 }
+            );
           }
-        );
-      } else {
-        // Geolocation not supported, use fixed demo location
-        const ujjainCoords = { 
-          lat: 23.1765,  // Fixed coordinates
-          lng: 75.7885,  // Fixed coordinates
-          accuracy: 10 
-        };
-        setStableLocation(ujjainCoords, true);
-      }
-    };
-
-    findLocation();
-
-    // Cleanup function
-    return () => {
-      mounted = false;
-      if (watchId) {
-        navigator.geolocation.clearWatch(watchId);
-      }
-    };
-  }, [map, setCurrentLocation, onLocationFound, isLocationSet, watchId]);
+          
+          if (onLocationFound) onLocationFound(location);
+        },
+        (error) => {
+          console.warn("Geolocation error:", error);
+          // Use demo location in Ujjain
+          const ujjainCoords = { lat: 23.1765, lng: 75.7885, accuracy: 10 };
+          setCurrentLocation(ujjainCoords);
+          
+          if (!isLocationSet) {
+            map.setView([ujjainCoords.lat, ujjainCoords.lng], 16);
+            setIsLocationSet(true);
+            
+            notificationManager.show(
+              'demo-location-fallback',
+              "📍 Using demo location in Ujjain for Simhastha 2028", 
+              { type: 'info', autoClose: 3000 }
+            );
+          }
+          
+          if (onLocationFound) onLocationFound(ujjainCoords);
+        }
+      );
+    } else {
+      // Fallback to demo location
+      const ujjainCoords = { lat: 23.1765, lng: 75.7885, accuracy: 10 };
+      setCurrentLocation(ujjainCoords);
+      map.setView([ujjainCoords.lat, ujjainCoords.lng], 16);
+      
+      notificationManager.show(
+        'demo-location-no-geolocation',
+        "📍 Using demo location in Ujjain", 
+        { type: 'info', autoClose: 3000 }
+      );
+      
+      if (onLocationFound) onLocationFound(ujjainCoords);
+    }
+  }, [map, setCurrentLocation, onLocationFound, isLocationSet]);
 
   return null;
 };
 
-// Map click handler for setting destinations with throttled notifications
+// Map click handler
 const MapClickHandler = ({ onMapClick, isSelectingDestination }) => {
-  const lastNotificationRef = useRef(0);
-  
   useMapEvents({
     click: (e) => {
       if (isSelectingDestination && onMapClick) {
         onMapClick(e.latlng);
         
-        // Throttle notifications - only show if 2 seconds have passed since last notification
-        const now = Date.now();
-        if (now - lastNotificationRef.current > 2000) {
-          toast.success("🎯 Destination set! Calculating route...", {
-            position: "top-right",
-            autoClose: 2000,
-          });
-          lastNotificationRef.current = now;
-        }
+        notificationManager.show(
+          'map-click-destination',
+          "🎯 Destination set! Calculating route...", 
+          { type: 'success', autoClose: 2000 }
+        );
       }
     },
   });
   return null;
 };
 
-// Real-time data fetcher
-const useRealTimeData = () => {
+const MapView = ({ 
+  currentLocation, 
+  setCurrentLocation, 
+  destination, 
+  setDestination, 
+  route, 
+  onCurrentLocationSet,
+  onDestinationSet,
+  showLegend = true,
+  className = ""
+}) => {
+  const [isSelectingDestination, setIsSelectingDestination] = useState(false);
   const [crowdData, setCrowdData] = useState([]);
   const [transportHubs, setTransportHubs] = useState([]);
   const [alertPoints, setAlertPoints] = useState([]);
-  const [vipRoutes, setVipRoutes] = useState([]);
-  const [accessibleFacilities, setAccessibleFacilities] = useState([]);
-  const [dynamicSignage, setDynamicSignage] = useState([]);
 
-  const fetchRealTimeData = useCallback(async () => {
-    try {
-      // Fetch crowd data
-      const crowdResponse = await fetch('http://localhost:8000/crowd/heatmap');
-      if (crowdResponse.ok) {
-        const data = await crowdResponse.json();
-        setCrowdData(data.heatmap_data || []);
-      } else {
-        // Enhanced fallback data with AI predictions
-        setCrowdData([
-          { 
-            id: 1, lat: 23.1765, lng: 75.7885, intensity: 0.85, 
-            name: "Ram Ghat Main", status: "Critical", 
-            prediction: "Peak until 8 AM", aiConfidence: 0.92 
-          },
-          { 
-            id: 2, lat: 23.1828, lng: 75.7681, intensity: 0.78, 
-            name: "Mahakaleshwar Temple", status: "High", 
-            prediction: "Decreasing in 30 min", aiConfidence: 0.88 
-          },
-          { 
-            id: 3, lat: 23.1801, lng: 75.7892, intensity: 0.45, 
-            name: "Shipra Ghat Alpha", status: "Moderate", 
-            prediction: "Stable", aiConfidence: 0.85 
-          },
-          { 
-            id: 4, lat: 23.1789, lng: 75.7901, intensity: 0.32, 
-            name: "Shipra Ghat Beta", status: "Low", 
-            prediction: "Good time to visit", aiConfidence: 0.90 
-          }
-        ]);
-      }
-
-      // Fetch transport hubs
-      const transportResponse = await fetch('http://localhost:8000/routes/transport/hubs');
-      if (transportResponse.ok) {
-        const data = await transportResponse.json();
-        setTransportHubs(data.hubs || []);
-      } else {
-        setTransportHubs([
-          { 
-            id: 1, lat: 23.1723, lng: 75.7823, type: "Central Hub", 
-            capacity: 3000, current: 1800, nextArrival: "3 min",
-            services: ["Bus", "Taxi", "E-Rickshaw", "Metro"],
-            aiOptimized: true, waitTime: 2
-          },
-          { 
-            id: 2, lat: 23.1856, lng: 75.7934, type: "East Terminal", 
-            capacity: 2500, current: 1200, nextArrival: "5 min",
-            services: ["Shuttle", "Private Vehicles"],
-            aiOptimized: true, waitTime: 3
-          },
-          { 
-            id: 3, lat: 23.1650, lng: 75.7750, type: "West Hub", 
-            capacity: 2000, current: 800, nextArrival: "Available now",
-            services: ["Bus Service", "Tourist Buses"],
-            aiOptimized: false, waitTime: 1
-          }
-        ]);
-      }
-
-      // Fetch alerts
-      const alertsResponse = await fetch('http://localhost:8000/alerts/current');
-      if (alertsResponse.ok) {
-        const data = await alertsResponse.json();
-        const formattedAlerts = data.alerts?.map(alert => ({
-          id: alert.id,
-          lat: alert.coordinates?.lat || 23.1790 + (Math.random() * 0.01),
-          lng: alert.coordinates?.lng || 75.7890 + (Math.random() * 0.01),
-          type: alert.severity,
-          message: alert.message,
-          timestamp: alert.timestamp,
-          aiGenerated: alert.ai_generated || false
-        })) || [];
-        setAlertPoints(formattedAlerts);
-      } else {
-        setAlertPoints([
-          { 
-            id: 1, lat: 23.1790, lng: 75.7890, type: "warning", 
-            message: "High Crowd Density - AI Prediction", 
-            timestamp: new Date().toISOString(), aiGenerated: true 
-          },
-          { 
-            id: 2, lat: 23.1740, lng: 75.7860, type: "info", 
-            message: "Medical Team Deployed", 
-            timestamp: new Date().toISOString(), aiGenerated: false 
-          },
-          { 
-            id: 3, lat: 23.1810, lng: 75.7910, type: "success", 
-            message: "Route Optimization Active", 
-            timestamp: new Date().toISOString(), aiGenerated: true 
-          }
-        ]);
-      }
-
-      // Enhanced VIP routes
-      setVipRoutes([
-        {
-          id: 1,
-          path: [[23.1834, 75.7712], [23.1828, 75.7681], [23.1820, 75.7720]],
-          name: "VIP Temple Route",
-          security: "High",
-          estimated_time: "8 min"
-        },
-        {
-          id: 2,
-          path: [[23.1840, 75.7720], [23.1765, 75.7885], [23.1750, 75.7900]],
-          name: "VIP Ghat Route",
-          security: "Maximum",
-          estimated_time: "12 min"
-        }
-      ]);
-
-      // Accessible facilities
-      setAccessibleFacilities([
-        { 
-          id: 1, lat: 23.1770, lng: 75.7830, type: "Rest Area", 
-          description: "Senior Citizen Rest Area", 
-          features: ["Wheelchair Access", "Medical Support", "Comfort Seating"],
-          aiRecommended: true
-        },
-        { 
-          id: 2, lat: 23.1750, lng: 75.7860, type: "Facility Center", 
-          description: "Divyangjan Support Center", 
-          features: ["Full Accessibility", "Support Staff", "Equipment"],
-          aiRecommended: true
-        },
-        { 
-          id: 3, lat: 23.1756, lng: 75.7834, type: "Medical Center", 
-          description: "Primary Medical Center", 
-          features: ["Emergency Care", "ICU", "Ambulance"],
-          aiRecommended: false
-        }
-      ]);
-
-      // Dynamic signage
-      setDynamicSignage([
-        { 
-          id: 1, lat: 23.1770, lng: 75.7870, 
-          message: "Main Ghat ↑ 5min", type: "direction",
-          aiUpdated: true, lastUpdate: new Date().toISOString()
-        },
-        { 
-          id: 2, lat: 23.1800, lng: 75.7850, 
-          message: "Temple Complex ← 8min", type: "direction",
-          aiUpdated: true, lastUpdate: new Date().toISOString()
-        },
-        { 
-          id: 3, lat: 23.1820, lng: 75.7890, 
-          message: "⚠️ High Crowd - Use Alt Route", type: "warning",
-          aiUpdated: true, lastUpdate: new Date().toISOString()
-        }
-      ]);
-
-    } catch (error) {
-      console.error("Error fetching real-time data:", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchRealTimeData();
-    const interval = setInterval(fetchRealTimeData, 30000); // Update every 30 seconds
-    return () => clearInterval(interval);
-  }, [fetchRealTimeData]);
-
-  return {
-    crowdData,
-    transportHubs,
-    alertPoints,
-    vipRoutes,
-    accessibleFacilities,
-    dynamicSignage
-  };
-};
-
-const MapView = ({ 
-  route, 
-  startLoc, 
-  endLoc, 
-  showAccessible, 
-  showTransport, 
-  showAlerts, 
-  showVIP,
-  darkMode,
-  onLocationUpdate,
-  onCurrentLocationSet
-}) => {
-  const mapRef = useRef();
-  const [mapCenter] = useState([23.1765, 75.7885]); // Ujjain coordinates
-  const [currentLocation, setCurrentLocation] = useState(null);
-  const [isSelectingDestination, setIsSelectingDestination] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
-  
-  // Use real-time data hook
-  const {
-    crowdData,
-    transportHubs,
-    alertPoints,
-    vipRoutes,
-    accessibleFacilities,
-    dynamicSignage
-  } = useRealTimeData();
-
-  // Handle current location updates
+  // Handle current location updates with notification management
   const handleLocationFound = useCallback((location) => {
     setCurrentLocation(location);
     if (onCurrentLocationSet) {
@@ -534,545 +203,303 @@ const MapView = ({
         accuracy: location.accuracy
       });
     }
-  }, [onCurrentLocationSet]);
+  }, [onCurrentLocationSet, setCurrentLocation]);
 
-  // Handle map clicks for destination selection
-  const handleMapClick = useCallback((latlng) => {
-    if (startLoc && !endLoc && onLocationUpdate) {
-      onLocationUpdate({
-        lat: latlng.lat,
-        lng: latlng.lng,
-        name: "Selected Destination"
-      }, 'end');
-      setIsSelectingDestination(false);
-    }
-  }, [startLoc, endLoc, onLocationUpdate]);
-
-  // Enable destination selection mode
+  // Enable destination selection mode with notification management
   const enableDestinationSelection = useCallback(() => {
     setIsSelectingDestination(true);
-    toast.info("🎯 Click on map to set destination", {
-      position: "top-center",
-      autoClose: 5000,
-    });
+    notificationManager.show(
+      'enable-destination-selection',
+      "🎯 Click on map to set destination", 
+      { type: 'info', position: "top-center", autoClose: 5000 }
+    );
   }, []);
 
-  // Map controller for auto-fitting bounds
-  const MapController = () => {
-    const map = useMap();
-    
-    useEffect(() => {
-      setMapReady(true);
+  // Handle map clicks for destination setting
+  const handleMapClick = useCallback((latlng) => {
+    if (isSelectingDestination) {
+      setDestination(latlng);
+      setIsSelectingDestination(false);
       
-      if (route && route.length > 0) {
-        const bounds = L.latLngBounds(route);
-        map.fitBounds(bounds, { padding: [50, 50] });
-      } else if (startLoc && endLoc) {
-        const bounds = L.latLngBounds([
-          [startLoc.lat, startLoc.lng],
-          [endLoc.lat, endLoc.lng]
-        ]);
-        map.fitBounds(bounds, { padding: [50, 50] });
+      if (onDestinationSet) {
+        onDestinationSet({
+          lat: latlng.lat,
+          lng: latlng.lng,
+          name: "Selected Destination"
+        });
       }
-    }, [map]); // Removed unnecessary dependencies as they don't trigger re-renders
-
-    return null;
-  };
-
-  // Helper functions
-  const getCrowdColor = (intensity) => {
-    if (intensity > 0.8) return '#ff4757';
-    if (intensity > 0.6) return '#ffa502';
-    if (intensity > 0.4) return '#ffdd59';
-    return '#2ed573';
-  };
-
-  const getAlertColor = (type) => {
-    switch (type) {
-      case 'danger': return '#ff4757';
-      case 'warning': return '#ffa502';
-      case 'info': return '#3742fa';
-      case 'success': return '#2ed573';
-      default: return '#747d8c';
     }
-  };
+  }, [isSelectingDestination, setDestination, onDestinationSet]);
 
-  const getTransportIcon = (services) => {
-    if (services.includes('Metro')) return '🚇';
-    if (services.includes('Bus')) return '🚌';
-    if (services.includes('Taxi')) return '🚕';
-    return '🚐';
-  };
+  // Load demo data
+  useEffect(() => {
+    // Demo crowd data
+    setCrowdData([
+      { id: 1, lat: 23.1765, lng: 75.7885, intensity: 0.85, name: "Ram Ghat Main", status: "Critical" },
+      { id: 2, lat: 23.1828, lng: 75.7681, intensity: 0.78, name: "Mahakaleshwar Temple", status: "High" },
+      { id: 3, lat: 23.1801, lng: 75.7892, intensity: 0.45, name: "Shipra Ghat Alpha", status: "Moderate" },
+    ]);
+
+    // Demo transport hubs
+    setTransportHubs([
+      { id: 1, lat: 23.1723, lng: 75.7823, type: "Central Hub", capacity: 3000, current: 1800 },
+      { id: 2, lat: 23.1856, lng: 75.7934, type: "East Terminal", capacity: 2500, current: 1200 },
+    ]);
+
+    // Demo alerts
+    setAlertPoints([
+      { id: 1, lat: 23.1790, lng: 75.7890, type: "warning", message: "High Crowd Density" },
+      { id: 2, lat: 23.1740, lng: 75.7860, type: "info", message: "Medical Team Deployed" },
+    ]);
+  }, []);
+
+  // Create icons
+  const currentLocationIcon = createCustomIcon('#4285f4', '📍', 35, true);
+  const destinationIcon = createCustomIcon('#ea4335', '🎯', 35);
+  const crowdIcon = (intensity) => createCustomIcon(
+    intensity > 0.7 ? '#ff4757' : intensity > 0.4 ? '#ffa502' : '#2ed573', 
+    '👥', 
+    25
+  );
+  const transportIcon = createCustomIcon('#34495e', '🚌', 30);
+  const alertIcon = (type) => createCustomIcon(
+    type === 'warning' ? '#ffa502' : type === 'error' ? '#ff4757' : '#2ed573',
+    type === 'warning' ? '⚠️' : type === 'error' ? '🚨' : 'ℹ️',
+    25
+  );
+
+  const defaultCenter = currentLocation ? [currentLocation.lat, currentLocation.lng] : [23.1765, 75.7885];
 
   return (
-    <div className="map-container" style={{ height: '100vh', width: '100%', position: 'relative' }}>
+    <div className={`map-container ${className}`}>
       <MapContainer
-        center={mapCenter}
-        zoom={14}
+        center={defaultCenter}
+        zoom={15}
         style={{ height: '100%', width: '100%' }}
-        ref={mapRef}
-        className={darkMode ? 'dark-map' : 'light-map'}
-        zoomControl={false}
+        className="leaflet-container"
       >
         <TileLayer
-          url={darkMode 
-            ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-            : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          }
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | AI-Powered Simhastha 2028'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
         
-        <MapController />
         <LocationFinder 
           setCurrentLocation={setCurrentLocation} 
           onLocationFound={handleLocationFound}
         />
+        
         <MapClickHandler 
-          onMapClick={handleMapClick} 
+          onMapClick={handleMapClick}
           isSelectingDestination={isSelectingDestination}
         />
 
         {/* Current Location Marker */}
         {currentLocation && (
-          <Marker 
+          <DraggableMarker
             position={[currentLocation.lat, currentLocation.lng]}
-            icon={createCustomIcon('#3742fa', '📍', 35, true)}
-          >
-            <Popup maxWidth={300} className="custom-popup">
-              <div className="popup-content">
-                <h4>📍 Your Current Location</h4>
-                <p>Accuracy: ±{Math.round(currentLocation.accuracy || 10)}m</p>
-                <p>Coordinates: {currentLocation.lat.toFixed(6)}, {currentLocation.lng.toFixed(6)}</p>
-                <div className="popup-actions">
-                  <button 
-                    className="popup-btn primary"
-                    onClick={enableDestinationSelection}
-                  >
-                    Set Destination
-                  </button>
-                </div>
-              </div>
-            </Popup>
-          </Marker>
-        )}
-
-        {/* Start Location - Draggable */}
-        {startLoc && (
-          <DraggableMarker
-            position={[startLoc.lat, startLoc.lng]}
-            setPosition={(newPos) => {
-              if (onLocationUpdate) {
-                onLocationUpdate({
-                  lat: newPos.lat,
-                  lng: newPos.lng,
-                  name: startLoc.name || "Updated Start Location"
-                }, 'start');
-              }
-            }}
-            icon={createCustomIcon('#2ed573', '🚩', 32)}
+            setPosition={(pos) => setCurrentLocation({ lat: pos.lat, lng: pos.lng })}
+            icon={currentLocationIcon}
             popupContent={
-              <div className="popup-content">
-                <h4>🚩 Start Location</h4>
-                <p><strong>{startLoc.name || 'Starting Point'}</strong></p>
-                <p className="popup-hint">💡 Drag to adjust position</p>
-                <div className="popup-actions">
-                  <button className="popup-btn">Get Directions</button>
-                </div>
+              <div>
+                <h4>📍 Current Location</h4>
+                <p>Lat: {currentLocation.lat.toFixed(6)}</p>
+                <p>Lng: {currentLocation.lng.toFixed(6)}</p>
+                {currentLocation.accuracy && (
+                  <p>Accuracy: ±{Math.round(currentLocation.accuracy)}m</p>
+                )}
               </div>
             }
           />
         )}
 
-        {/* End Location - Draggable */}
-        {endLoc && (
+        {/* Destination Marker */}
+        {destination && (
           <DraggableMarker
-            position={[endLoc.lat, endLoc.lng]}
-            setPosition={(newPos) => {
-              if (onLocationUpdate) {
-                onLocationUpdate({
-                  lat: newPos.lat,
-                  lng: newPos.lng,
-                  name: endLoc.name || "Updated Destination"
-                }, 'end');
-              }
-            }}
-            icon={createCustomIcon('#ff4757', '🎯', 32)}
+            position={[destination.lat, destination.lng]}
+            setPosition={(pos) => setDestination({ lat: pos.lat, lng: pos.lng })}
+            icon={destinationIcon}
             popupContent={
-              <div className="popup-content">
+              <div>
                 <h4>🎯 Destination</h4>
-                <p><strong>{endLoc.name || 'Destination Point'}</strong></p>
-                <p className="popup-hint">💡 Drag to adjust position</p>
-                <div className="popup-actions">
-                  <button className="popup-btn">View Details</button>
-                </div>
+                <p>Lat: {destination.lat.toFixed(6)}</p>
+                <p>Lng: {destination.lng.toFixed(6)}</p>
               </div>
             }
           />
         )}
 
-        {/* AI-Enhanced Route Polyline */}
+        {/* Route Polyline */}
         {route && route.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5 }}
-          >
-            <Polyline
-              positions={route}
-              color="#667eea"
-              weight={6}
-              opacity={0.8}
-              dashArray="10, 5"
-              className="ai-route"
-            />
-          </motion.div>
+          <Polyline
+            positions={route}
+            color="#4285f4"
+            weight={5}
+            opacity={0.8}
+          />
         )}
 
-        {/* Crowd Density Overlay with AI Predictions */}
-        {showAccessible && crowdData.map(point => (
+        {/* Crowd Data Points */}
+        {crowdData.map((point) => (
           <Marker
             key={point.id}
             position={[point.lat, point.lng]}
-            icon={createCustomIcon(getCrowdColor(point.intensity), '👥', 28)}
+            icon={crowdIcon(point.intensity)}
           >
-            <Popup maxWidth={350} className="custom-popup">
-              <div className="popup-content">
+            <Popup>
+              <div>
                 <h4>👥 {point.name}</h4>
-                <div className="crowd-metrics">
-                  <div className="metric-item">
-                    <span className="metric-label">Crowd Level:</span>
-                    <div className="crowd-bar">
-                      <div 
-                        className="crowd-fill" 
-                        style={{ 
-                          width: `${point.intensity * 100}%`, 
-                          backgroundColor: getCrowdColor(point.intensity) 
-                        }}
-                      />
-                    </div>
-                    <span className="metric-value">{Math.round(point.intensity * 100)}%</span>
-                  </div>
-                  <div className="metric-item">
-                    <span className="metric-label">Status:</span>
-                    <span className={`status-badge ${point.status.toLowerCase()}`}>
-                      {point.status}
-                    </span>
-                  </div>
-                  {point.prediction && (
-                    <div className="metric-item">
-                      <span className="metric-label">🤖 AI Prediction:</span>
-                      <span className="prediction-text">{point.prediction}</span>
-                    </div>
-                  )}
-                  {point.aiConfidence && (
-                    <div className="metric-item">
-                      <span className="metric-label">AI Confidence:</span>
-                      <span className="confidence-value">{Math.round(point.aiConfidence * 100)}%</span>
-                    </div>
-                  )}
-                </div>
-                <div className="popup-actions">
-                  <button className="popup-btn">Avoid This Area</button>
-                  <button className="popup-btn secondary">View Alternatives</button>
-                </div>
+                <p>Status: <span className={`status-badge ${point.status.toLowerCase()}`}>{point.status}</span></p>
+                <p>Crowd Level: {Math.round(point.intensity * 100)}%</p>
               </div>
             </Popup>
           </Marker>
         ))}
 
-        {/* Enhanced Transport Hubs */}
-        {showTransport && transportHubs.map(hub => (
+        {/* Transport Hubs */}
+        {transportHubs.map((hub) => (
           <Marker
             key={hub.id}
             position={[hub.lat, hub.lng]}
-            icon={createCustomIcon(
-              hub.aiOptimized ? '#3742fa' : '#747d8c', 
-              getTransportIcon(hub.services), 
-              30
-            )}
+            icon={transportIcon}
           >
-            <Popup maxWidth={400} className="custom-popup">
-              <div className="popup-content">
-                <h4>{getTransportIcon(hub.services)} {hub.type}</h4>
-                <div className="transport-info">
-                  <div className="capacity-info">
-                    <div className="capacity-bar">
-                      <div 
-                        className="capacity-fill" 
-                        style={{ 
-                          width: `${(hub.current / hub.capacity) * 100}%`,
-                          backgroundColor: hub.current / hub.capacity > 0.8 ? '#ff4757' : '#2ed573'
-                        }}
-                      />
-                    </div>
-                    <span>{hub.current}/{hub.capacity} people</span>
-                  </div>
-                  <div className="service-list">
-                    <strong>Services:</strong>
-                    <div className="services">
-                      {hub.services.map((service, idx) => (
-                        <span key={idx} className="service-tag">{service}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="timing-info">
-                    <p><strong>Next Arrival:</strong> {hub.nextArrival}</p>
-                    <p><strong>Wait Time:</strong> ~{hub.waitTime} min</p>
-                  </div>
-                  {hub.aiOptimized && (
-                    <div className="ai-badge">
-                      🤖 AI Optimized Route Available
-                    </div>
-                  )}
-                </div>
-                <div className="popup-actions">
-                  <button className="popup-btn primary">Book Transport</button>
-                  <button className="popup-btn">View Schedule</button>
-                </div>
+            <Popup>
+              <div>
+                <h4>🚌 {hub.type}</h4>
+                <p>Capacity: {hub.current}/{hub.capacity}</p>
+                <p>Utilization: {Math.round((hub.current / hub.capacity) * 100)}%</p>
               </div>
             </Popup>
           </Marker>
         ))}
 
-        {/* Enhanced Alert Points */}
-        {showAlerts && alertPoints.map(alert => (
+        {/* Alert Points */}
+        {alertPoints.map((alert) => (
           <Marker
             key={alert.id}
             position={[alert.lat, alert.lng]}
-            icon={createCustomIcon(getAlertColor(alert.type), '⚠️', 26, alert.type === 'danger')}
+            icon={alertIcon(alert.type)}
           >
-            <Popup maxWidth={350} className="custom-popup">
-              <div className="popup-content">
-                <h4>
-                  ⚠️ Alert: {alert.type.toUpperCase()}
-                  {alert.aiGenerated && <span className="ai-tag">🤖 AI</span>}
-                </h4>
-                <p className="alert-message">{alert.message}</p>
-                <p className="alert-time">
-                  <strong>Time:</strong> {new Date(alert.timestamp).toLocaleTimeString()}
-                </p>
-                {alert.aiGenerated && (
-                  <div className="ai-info">
-                    <small>Generated by AI analysis of crowd patterns and real-time data</small>
-                  </div>
-                )}
-                <div className="popup-actions">
-                  <button className="popup-btn">View Details</button>
-                  <button className="popup-btn secondary">Report Issue</button>
-                </div>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-
-        {/* VIP Routes */}
-        {showVIP && vipRoutes.map((vipRoute, index) => (
-          <React.Fragment key={`vip-${index}`}>
-            <Polyline
-              positions={vipRoute.path}
-              color="#ffd700"
-              weight={5}
-              opacity={0.8}
-              dashArray="8, 12"
-              className="vip-route"
-            />
-            <Marker
-              position={vipRoute.path[0]}
-              icon={createCustomIcon('#ffd700', '👑', 24)}
-            >
-              <Popup maxWidth={300} className="custom-popup">
-                <div className="popup-content">
-                  <h4>👑 {vipRoute.name}</h4>
-                  <p><strong>Security Level:</strong> {vipRoute.security}</p>
-                  <p><strong>Estimated Time:</strong> {vipRoute.estimated_time}</p>
-                  <div className="vip-features">
-                    <span className="feature-tag">🛡️ Security Escort</span>
-                    <span className="feature-tag">🚫 No Crowds</span>
-                    <span className="feature-tag">⚡ Priority Access</span>
-                  </div>
-                  <div className="popup-actions">
-                    <button className="popup-btn primary">Request VIP Access</button>
-                  </div>
-                </div>
-              </Popup>
-            </Marker>
-          </React.Fragment>
-        ))}
-
-        {/* Accessible Facilities */}
-        {showAccessible && accessibleFacilities.map(facility => (
-          <Marker
-            key={facility.id}
-            position={[facility.lat, facility.lng]}
-            icon={createCustomIcon(
-              facility.aiRecommended ? '#2ed573' : '#747d8c', 
-              '♿', 
-              28
-            )}
-          >
-            <Popup maxWidth={350} className="custom-popup">
-              <div className="popup-content">
-                <h4>♿ {facility.description}</h4>
-                <div className="facility-features">
-                  <strong>Features:</strong>
-                  <div className="features-list">
-                    {facility.features.map((feature, idx) => (
-                      <span key={idx} className="feature-tag">{feature}</span>
-                    ))}
-                  </div>
-                </div>
-                {facility.aiRecommended && (
-                  <div className="ai-recommendation">
-                    🤖 AI Recommended based on your accessibility needs
-                  </div>
-                )}
-                <div className="popup-actions">
-                  <button className="popup-btn primary">Get Directions</button>
-                  <button className="popup-btn">Request Assistance</button>
-                </div>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-
-        {/* Dynamic Signage */}
-        {dynamicSignage.map(sign => (
-          <Marker
-            key={sign.id}
-            position={[sign.lat, sign.lng]}
-            icon={createCustomIcon(
-              sign.type === 'warning' ? '#ffa502' : '#3742fa', 
-              '📋', 
-              22
-            )}
-          >
-            <Popup maxWidth={300} className="custom-popup">
-              <div className="popup-content">
-                <h4>📋 Dynamic Sign</h4>
-                <p className="sign-message">{sign.message}</p>
-                <div className="sign-info">
-                  <p><strong>Type:</strong> {sign.type}</p>
-                  {sign.aiUpdated && (
-                    <p><strong>🤖 AI Updated:</strong> {new Date(sign.lastUpdate).toLocaleTimeString()}</p>
-                  )}
-                </div>
+            <Popup>
+              <div>
+                <h4>{alert.type === 'warning' ? '⚠️' : alert.type === 'error' ? '🚨' : 'ℹ️'} Alert</h4>
+                <p>{alert.message}</p>
               </div>
             </Popup>
           </Marker>
         ))}
       </MapContainer>
 
-      {/* Enhanced Map Legend */}
-      <AnimatePresence>
-        {mapReady && (
-          <motion.div 
-            className="map-legend enhanced"
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5, duration: 0.5 }}
-          >
-            <div className="legend-header">
-              <h4>🗺️ Map Legend</h4>
-              <div className="ai-indicator">🤖 AI-Powered</div>
-            </div>
-            <div className="legend-sections">
-              {currentLocation && (
-                <div className="legend-section">
-                  <div className="legend-item">
-                    <div className="legend-icon" style={{ backgroundColor: '#3742fa' }}>📍</div>
-                    <span>Your Location</span>
-                  </div>
-                </div>
-              )}
-              
-              {route && route.length > 0 && (
-                <div className="legend-section">
-                  <div className="legend-item">
-                    <div className="legend-line" style={{ backgroundColor: '#667eea' }}></div>
-                    <span>AI Route</span>
-                  </div>
-                </div>
-              )}
-
-              {showAccessible && (
-                <div className="legend-section">
-                  <div className="legend-item">
-                    <div className="legend-icon" style={{ backgroundColor: '#2ed573' }}>👥</div>
-                    <span>Low Crowd</span>
-                  </div>
-                  <div className="legend-item">
-                    <div className="legend-icon" style={{ backgroundColor: '#ffa502' }}>👥</div>
-                    <span>High Crowd</span>
-                  </div>
-                  <div className="legend-item">
-                    <div className="legend-icon" style={{ backgroundColor: '#2ed573' }}>♿</div>
-                    <span>Accessible</span>
-                  </div>
-                </div>
-              )}
-
-              {showTransport && (
-                <div className="legend-section">
-                  <div className="legend-item">
-                    <div className="legend-icon" style={{ backgroundColor: '#3742fa' }}>🚌</div>
-                    <span>Transport Hub</span>
-                  </div>
-                </div>
-              )}
-
-              {showAlerts && (
-                <div className="legend-section">
-                  <div className="legend-item">
-                    <div className="legend-icon" style={{ backgroundColor: '#ff4757' }}>⚠️</div>
-                    <span>Active Alert</span>
-                  </div>
-                </div>
-              )}
-
-              {showVIP && (
-                <div className="legend-section">
-                  <div className="legend-item">
-                    <div className="legend-line" style={{ backgroundColor: '#ffd700' }}></div>
-                    <span>VIP Route</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Map Controls */}
       <div className="map-controls">
-        <motion.button
-          className="control-btn location-btn"
-          onClick={() => {
-            if (currentLocation && mapRef.current) {
-              mapRef.current.setView([currentLocation.lat, currentLocation.lng], 16);
-              toast.success("📍 Centered on your location");
-            }
-          }}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          title="Center on my location"
-        >
-          📍
-        </motion.button>
-        
-        <motion.button
-          className="control-btn destination-btn"
+        <button
+          className="control-btn"
           onClick={enableDestinationSelection}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          title="Set destination by clicking on map"
+          title="Set Destination"
         >
           🎯
-        </motion.button>
+        </button>
+        <button
+          className="control-btn"
+          onClick={() => {
+            if (currentLocation) {
+              // Re-center map on current location
+              notificationManager.show(
+                'recenter-map',
+                "📍 Map centered on current location", 
+                { type: 'info', autoClose: 1500 }
+              );
+            }
+          }}
+          title="Center on Location"
+        >
+          📍
+        </button>
       </div>
 
-      <style>{`
+      {/* Enhanced Legend */}
+      {showLegend && (
+        <div className="map-legend enhanced">
+          <div className="legend-header">
+            <h4>Map Legend</h4>
+            <span className="ai-indicator">AI Enhanced</span>
+          </div>
+          <div className="legend-sections">
+            <div className="legend-section">
+              <div className="legend-item">
+                <div className="legend-icon" style={{ background: '#4285f4' }}>📍</div>
+                <span>Current Location</span>
+              </div>
+              <div className="legend-item">
+                <div className="legend-icon" style={{ background: '#ea4335' }}>🎯</div>
+                <span>Destination</span>
+              </div>
+              <div className="legend-item">
+                <div className="legend-line" style={{ background: '#4285f4' }}></div>
+                <span>Route</span>
+              </div>
+            </div>
+            <div className="legend-section">
+              <div className="legend-item">
+                <div className="legend-icon" style={{ background: '#ff4757' }}>👥</div>
+                <span>High Crowd</span>
+              </div>
+              <div className="legend-item">
+                <div className="legend-icon" style={{ background: '#ffa502' }}>👥</div>
+                <span>Moderate Crowd</span>
+              </div>
+              <div className="legend-item">
+                <div className="legend-icon" style={{ background: '#2ed573' }}>👥</div>
+                <span>Low Crowd</span>
+              </div>
+            </div>
+            <div className="legend-section">
+              <div className="legend-item">
+                <div className="legend-icon" style={{ background: '#34495e' }}>🚌</div>
+                <span>Transport Hub</span>
+              </div>
+              <div className="legend-item">
+                <div className="legend-icon" style={{ background: '#ffa502' }}>⚠️</div>
+                <span>Alerts</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
         .map-container {
           position: relative;
+          height: 100%;
+          width: 100%;
+        }
+        
+        .map-controls {
+          position: absolute;
+          top: 1rem;
+          right: 1rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          z-index: 1000;
+        }
+        
+        .control-btn {
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          border: none;
+          background: white;
+          color: #333;
+          font-size: 1.2rem;
+          cursor: pointer;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          transition: all 0.2s ease;
+        }
+        
+        .control-btn:hover {
+          background: #f8f9fa;
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(0,0,0,0.2);
         }
         
         .map-legend.enhanced {
@@ -1080,11 +507,10 @@ const MapView = ({
           bottom: 2rem;
           left: 50%;
           transform: translateX(-50%);
-          background: var(--panel-bg);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-lg);
+          background: white;
+          border: 1px solid #ddd;
+          border-radius: 12px;
           padding: 1.5rem;
-          backdrop-filter: var(--blur-md);
           z-index: 1000;
           min-width: 300px;
           max-width: 500px;
@@ -1097,12 +523,12 @@ const MapView = ({
           align-items: center;
           margin-bottom: 1rem;
           padding-bottom: 0.5rem;
-          border-bottom: 1px solid var(--border);
+          border-bottom: 1px solid #eee;
         }
         
         .legend-header h4 {
           margin: 0;
-          color: var(--text-primary);
+          color: #333;
           font-size: 1rem;
           font-weight: 600;
         }
@@ -1111,7 +537,7 @@ const MapView = ({
           background: linear-gradient(45deg, #667eea, #764ba2);
           color: white;
           padding: 0.25rem 0.5rem;
-          border-radius: var(--radius-full);
+          border-radius: 20px;
           font-size: 0.75rem;
           font-weight: 500;
         }
@@ -1133,10 +559,10 @@ const MapView = ({
           align-items: center;
           gap: 0.5rem;
           font-size: 0.85rem;
-          color: var(--text-secondary);
+          color: #666;
           padding: 0.25rem 0.5rem;
-          border-radius: var(--radius-sm);
-          background: var(--glass-bg);
+          border-radius: 6px;
+          background: #f8f9fa;
         }
         
         .legend-icon {
@@ -1156,132 +582,9 @@ const MapView = ({
           border-radius: 2px;
         }
         
-        .map-controls {
-          position: absolute;
-          top: 1rem;
-          right: 1rem;
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-          z-index: 1000;
-        }
-        
-        .control-btn {
-          width: 48px;
-          height: 48px;
-          border-radius: 50%;
-          border: none;
-          background: var(--panel-bg);
-          color: var(--text-primary);
-          font-size: 1.2rem;
-          cursor: pointer;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-          backdrop-filter: var(--blur-md);
-          transition: all 0.2s ease;
-        }
-        
-        .control-btn:hover {
-          background: var(--glass-hover);
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(0,0,0,0.2);
-        }
-        
-        .custom-popup .popup-content {
-          padding: 0;
-        }
-        
-        .custom-popup h4 {
-          margin: 0 0 0.75rem 0;
-          color: var(--text-primary);
-          font-size: 1.1rem;
-          font-weight: 600;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-        
-        .ai-tag {
-          background: linear-gradient(45deg, #667eea, #764ba2);
-          color: white;
-          padding: 0.125rem 0.375rem;
-          border-radius: var(--radius-full);
-          font-size: 0.7rem;
-          font-weight: 500;
-        }
-        
-        .popup-actions {
-          display: flex;
-          gap: 0.5rem;
-          margin-top: 1rem;
-          flex-wrap: wrap;
-        }
-        
-        .popup-btn {
-          padding: 0.5rem 1rem;
-          border: none;
-          border-radius: var(--radius-sm);
-          font-size: 0.85rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          flex: 1;
-          min-width: 80px;
-        }
-        
-        .popup-btn.primary {
-          background: var(--primary);
-          color: white;
-        }
-        
-        .popup-btn.secondary {
-          background: var(--glass-bg);
-          color: var(--text-secondary);
-          border: 1px solid var(--border);
-        }
-        
-        .popup-btn:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        }
-        
-        .crowd-metrics, .transport-info {
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-          margin: 0.75rem 0;
-        }
-        
-        .metric-item {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-size: 0.85rem;
-        }
-        
-        .metric-label {
-          font-weight: 500;
-          color: var(--text-secondary);
-          min-width: 80px;
-        }
-        
-        .crowd-bar, .capacity-bar {
-          flex: 1;
-          height: 8px;
-          background: var(--glass-bg);
-          border-radius: 4px;
-          overflow: hidden;
-          position: relative;
-        }
-        
-        .crowd-fill, .capacity-fill {
-          height: 100%;
-          transition: width 0.3s ease;
-          border-radius: 4px;
-        }
-        
         .status-badge {
           padding: 0.25rem 0.5rem;
-          border-radius: var(--radius-full);
+          border-radius: 20px;
           font-size: 0.75rem;
           font-weight: 500;
           text-transform: uppercase;
@@ -1292,80 +595,6 @@ const MapView = ({
         .status-badge.moderate { background: #ffdd59; color: #333; }
         .status-badge.low { background: #2ed573; color: white; }
         
-        .prediction-text {
-          font-style: italic;
-          color: var(--primary);
-          font-weight: 500;
-        }
-        
-        .confidence-value {
-          font-weight: 600;
-          color: var(--primary);
-        }
-        
-        .service-tag, .feature-tag {
-          background: var(--glass-bg);
-          color: var(--text-secondary);
-          padding: 0.25rem 0.5rem;
-          border-radius: var(--radius-full);
-          font-size: 0.75rem;
-          border: 1px solid var(--border);
-        }
-        
-        .services, .features-list {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.25rem;
-          margin-top: 0.25rem;
-        }
-        
-        .ai-badge, .ai-recommendation, .ai-info {
-          background: linear-gradient(45deg, #667eea, #764ba2);
-          color: white;
-          padding: 0.5rem;
-          border-radius: var(--radius-sm);
-          font-size: 0.8rem;
-          margin-top: 0.5rem;
-        }
-        
-        .vip-features {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.25rem;
-          margin: 0.5rem 0;
-        }
-        
-        .sign-message {
-          font-weight: 600;
-          font-size: 1rem;
-          color: var(--text-primary);
-          margin: 0.5rem 0;
-        }
-        
-        .popup-hint {
-          font-style: italic;
-          font-size: 0.8rem;
-          color: var(--text-muted);
-          margin: 0.25rem 0;
-        }
-        
-        .dark-map .leaflet-popup-content-wrapper {
-          background: var(--panel-bg);
-          color: var(--text-primary);
-        }
-        
-        .dark-map .leaflet-popup-tip {
-          background: var(--panel-bg);
-        }
-        
-        .ai-route {
-          filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.6));
-        }
-        
-        .vip-route {
-          filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.8));
-        }
-        
         @media (max-width: 768px) {
           .map-legend.enhanced {
             bottom: 1rem;
@@ -1373,14 +602,6 @@ const MapView = ({
             right: 1rem;
             transform: none;
             padding: 1rem;
-          }
-          
-          .legend-sections {
-            gap: 0.5rem;
-          }
-          
-          .legend-item {
-            font-size: 0.8rem;
           }
           
           .map-controls {
