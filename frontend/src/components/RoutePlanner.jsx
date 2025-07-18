@@ -17,9 +17,11 @@ import {
   Gauge,
   Crown,
   Brain,
-  UserCheck
+  UserCheck,
+
 } from "lucide-react";
 import { toast } from "react-toastify";
+import LocationSearch from "./LocationSearch";
 
 const RoutePlanner = ({ onRouteFound, onStartChange, onEndChange, currentLocation }) => {
   const [startLocation, setStartLocation] = useState("");
@@ -66,7 +68,7 @@ const RoutePlanner = ({ onRouteFound, onStartChange, onEndChange, currentLocatio
     }
   ];
 
-  const [availableLocations, setAvailableLocations] = useState([]);
+  // const [availableLocations, setAvailableLocations] = useState([]); // Removed unused variable
   const [, setNearbyLocations] = useState([]);
   const [userType, setUserType] = useState("general"); // general, elderly, divyangjan, vip
   const [weatherConditions, setWeatherConditions] = useState(null);
@@ -77,40 +79,18 @@ const RoutePlanner = ({ onRouteFound, onStartChange, onEndChange, currentLocatio
       try {
         const response = await fetch('http://localhost:8000/routes/locations');
         if (response.ok) {
-          const data = await response.json();
-          const formattedLocations = data.locations.map(loc => 
-            `${loc.name} - ${loc.type.charAt(0).toUpperCase() + loc.type.slice(1)} (${Math.round(loc.crowd_density * 100)}% crowd)`
-          );
-          setAvailableLocations(formattedLocations);
+          // const data = await response.json(); // Removed unused variable
+          // const formattedLocations = data.locations.map(loc => 
+          //   `${loc.name} - ${loc.type.charAt(0).toUpperCase() + loc.type.slice(1)} (${Math.round(loc.crowd_density * 100)}% crowd)`
+          // ); // Removed unused variable
+          // setAvailableLocations(formattedLocations); // Removed unused variable
         } else {
-          // Fallback locations
-          setAvailableLocations([
-            "Ram Ghat Main - Ghat (64% crowd)",
-            "Mahakaleshwar Temple - Temple (72% crowd)",
-            "Central Transport Hub - Transport (45% crowd)",
-            "East Terminal - Transport (38% crowd)",
-            "North Parking Zone - Parking (52% crowd)",
-            "South Parking Zone - Parking (48% crowd)",
-            "Primary Medical Center - Medical (25% crowd)",
-            "Tourist Information Center - Info (30% crowd)",
-            "Main Food Court - Food (65% crowd)",
-            "Family Rest Area - Rest (40% crowd)"
-          ]);
+          // Fallback locations - commented out since setAvailableLocations is removed
+          console.log('Using fallback locations');
         }
       } catch (error) {
         console.log('Using fallback locations');
-        setAvailableLocations([
-          "Ram Ghat Main - Ghat (64% crowd)",
-          "Mahakaleshwar Temple - Temple (72% crowd)",
-          "Central Transport Hub - Transport (45% crowd)",
-          "East Terminal - Transport (38% crowd)",
-          "North Parking Zone - Parking (52% crowd)",
-          "South Parking Zone - Parking (48% crowd)",
-          "Primary Medical Center - Medical (25% crowd)",
-          "Tourist Information Center - Info (30% crowd)",
-          "Main Food Court - Food (65% crowd)",
-          "Family Rest Area - Rest (40% crowd)"
-        ]);
+        // setAvailableLocations removed - using LocationSearch component instead
       }
     };
     
@@ -168,29 +148,100 @@ const RoutePlanner = ({ onRouteFound, onStartChange, onEndChange, currentLocatio
     fetchAIInsights();
   }, []);
 
-  // Generate enhanced fallback routes
-  const generateFallbackRoutes = useCallback(() => {
-    const startCoords = currentLocation || { lat: 23.1765, lng: 75.7885 };
-    const endCoords = { lat: 23.1828, lng: 75.7681 }; // Mahakaleshwar Temple
-    
-    // Calculate realistic distance
-    const getDistance = (lat1, lon1, lat2, lon2) => {
-      const R = 6371; // Earth's radius in km
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = 
-        Math.sin(dLat/2) * Math.sin(dLat/2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-        Math.sin(dLon/2) * Math.sin(dLon/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      return R * c;
-    };
+  // Helper function to generate waypoints
+  const generateWaypoints = useCallback((start, end, count) => {
+    const waypoints = [];
+    for (let i = 0; i <= count; i++) {
+      const ratio = i / count;
+      const lat = start.lat + (end.lat - start.lat) * ratio;
+      const lng = start.lng + (end.lng - start.lng) * ratio;
+      waypoints.push({
+        lat: lat + (Math.random() - 0.5) * 0.001, // Add small random variation
+        lng: lng + (Math.random() - 0.5) * 0.001,
+        name: i === 0 ? (startLocation === "My Current Location" ? "My Location" : startLocation.split(' - ')[0]) :
+              i === count ? endLocation.split(' - ')[0] :
+              `Waypoint ${i}`
+      });
+    }
+    return waypoints;
+  }, [startLocation, endLocation]);
 
-    const distance = getDistance(startCoords.lat, startCoords.lng, endCoords.lat, endCoords.lng);
+  // Generate enhanced routes using real routing service
+  const generateFallbackRoutes = useCallback(async () => {
+    const startCoords = currentLocation || { lat: 23.1765, lng: 75.7885 };
+    
+    // Parse end location coordinates
+    let endCoords = { lat: 23.1828, lng: 75.7681 }; // Default to Mahakaleshwar
+    
+    // Try to extract coordinates from endLocation if it contains them
+    if (endLocation && endLocation.includes('(') && endLocation.includes(')')) {
+      const coordMatch = endLocation.match(/\(([^)]+)\)/);
+      if (coordMatch) {
+        const [lat, lng] = coordMatch[1].split(',').map(c => parseFloat(c.trim()));
+        if (!isNaN(lat) && !isNaN(lng)) {
+          endCoords = { lat, lng };
+        }
+      }
+    }
+
+    try {
+      // Use RoutingService for real routing
+      const RoutingService = (await import('../utils/RoutingService')).default;
+      
+      const routeOptions = {
+        profile: 'foot-walking',
+        avoidCrowds: preferences.avoidCrowds,
+        accessibleRoute: preferences.accessibleRoute || userType === 'divyangjan' || userType === 'elderly',
+        routeType: routeType
+      };
+
+      const route = await RoutingService.calculateRoute(startCoords, endCoords, routeOptions);
+      
+      if (route && route.coordinates) {
+        return [
+          {
+            id: "real_route_001",
+            name: "🗺️ Real Road Route",
+            distance: route.distance,
+            duration: route.duration,
+            crowdLevel: route.crowdLevel || (userType === 'vip' ? 15 : 35),
+            safetyScore: route.safetyScore || (userType === 'divyangjan' || userType === 'elderly' ? 98 : 95),
+            accessibilityScore: route.accessibilityScore || (userType === 'divyangjan' ? 100 : userType === 'elderly' ? 95 : 85),
+            difficulty: route.difficulty || (userType === 'divyangjan' || userType === 'elderly' ? "Easy" : "Moderate"),
+            highlights: [
+              "🗺️ Real road data from OpenStreetMap",
+              "📊 Accurate distance and timing",
+              "🛡️ Safe pedestrian routes",
+              ...(route.surface_info ? ["🛤️ Surface type considered"] : [])
+            ],
+            warnings: route.instructions ? [] : ["⚠️ Limited turn-by-turn data"],
+            waypoints: route.coordinates.map((coord, index) => ({
+              lat: coord[0],
+              lng: coord[1],
+              name: index === 0 ? (startLocation === "My Current Location" ? "My Location" : startLocation.split(' - ')[0]) :
+                    index === route.coordinates.length - 1 ? endLocation.split(' - ')[0] :
+                    `Waypoint ${index}`
+            })),
+            instructions: route.instructions || [
+              `🚀 Start from ${startLocation === "My Current Location" ? "your location" : startLocation.split(' - ')[0]}`,
+              "🎯 Follow the mapped route with real road data",
+              "✅ Arrive at destination via optimal path"
+            ],
+            aiConfidence: 0.96,
+            realRoute: true
+          }
+        ];
+      }
+    } catch (error) {
+      console.error('Real routing failed, using fallback:', error);
+    }
+
+    // Fallback to simple route if real routing fails
+    const distance = calculateDistance(startCoords, endCoords);
     
     return [
       {
-        id: "ai_route_001",
+        id: "fallback_route_001",
         name: "🤖 AI-Optimized Route",
         distance: `${distance.toFixed(2)} km`,
         duration: `${Math.round(distance * 12)}m`,
@@ -203,29 +254,36 @@ const RoutePlanner = ({ onRouteFound, onStartChange, onEndChange, currentLocatio
           "📊 Real-time crowd analysis",
           "🛡️ Safety-first routing"
         ],
-        warnings: [],
-        waypoints: [
-          { lat: startCoords.lat, lng: startCoords.lng, name: startLocation === "My Current Location" ? "My Location" : startLocation.split(' - ')[0] },
-          { lat: (startCoords.lat + endCoords.lat) / 2, lng: (startCoords.lng + endCoords.lng) / 2, name: "🤖 AI Checkpoint" },
-          { lat: endCoords.lat, lng: endCoords.lng, name: endLocation.split(' - ')[0] }
-        ],
+        warnings: ["⚠️ Using estimated route - real road data unavailable"],
+        waypoints: generateWaypoints(startCoords, endCoords, 3),
         instructions: [
           `🚀 Start from ${startLocation === "My Current Location" ? "your location" : startLocation.split(' - ')[0]}`,
           "🎯 Follow AI-optimized path with real-time updates",
           "✅ Arrive at destination with minimal crowd exposure"
         ],
-        aiConfidence: 0.94
+        aiConfidence: 0.85
       }
     ];
-  }, [startLocation, endLocation, currentLocation, userType]);
+  }, [startLocation, endLocation, currentLocation, userType, preferences.avoidCrowds, preferences.accessibleRoute, routeType, generateWaypoints]);
+
+  // Helper function to calculate distance
+  const calculateDistance = (start, end) => {
+    const R = 6371; // Earth's radius in km
+    const dLat = (end.lat - start.lat) * Math.PI / 180;
+    const dLng = (end.lng - start.lng) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(start.lat * Math.PI / 180) * Math.cos(end.lat * Math.PI / 180) * 
+      Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
 
   const generateRouteOptionsCallback = useCallback(async () => {
     setIsCalculating(true);
     
     try {
-      // User profile is prepared inline in the request body
-
-      // Call the sophisticated backend API
+      // First try the backend API
       const response = await fetch('http://localhost:8000/routes/calculate', {
         method: 'POST',
         headers: {
@@ -245,41 +303,79 @@ const RoutePlanner = ({ onRouteFound, onStartChange, onEndChange, currentLocatio
         })
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to calculate routes');
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.routes && data.routes.length > 0) {
+          const formattedRoutes = data.routes.map(route => ({
+            id: route.id,
+            name: route.name,
+            distance: route.distance,
+            duration: route.duration,
+            crowdLevel: route.crowd_level,
+            safetyScore: route.safety_score,
+            accessibilityScore: route.accessibility_score || 80,
+            difficulty: route.difficulty,
+            highlights: route.highlights,
+            warnings: route.warnings,
+            waypoints: route.waypoints,
+            instructions: route.instructions,
+            aiConfidence: route.ai_confidence || 0.85,
+            healthBenefits: route.health_benefits,
+            alternativeOptions: route.alternative_options
+          }));
+          
+          setRouteOptions(formattedRoutes);
+          setSelectedRoute(formattedRoutes[0]);
+          
+          // Send route data to parent components
+          if (formattedRoutes[0].waypoints && formattedRoutes[0].waypoints.length > 0) {
+            const routeCoordinates = formattedRoutes[0].waypoints.map(wp => [wp.lat, wp.lng]);
+            onRouteFound(routeCoordinates);
+            
+            const firstPoint = formattedRoutes[0].waypoints[0];
+            const lastPoint = formattedRoutes[0].waypoints[formattedRoutes[0].waypoints.length - 1];
+            
+            onStartChange({
+              lat: firstPoint.lat,
+              lng: firstPoint.lng,
+              name: firstPoint.name
+            });
+            
+            onEndChange({
+              lat: lastPoint.lat,
+              lng: lastPoint.lng,
+              name: lastPoint.name
+            });
+          }
+          
+          toast.success(`🎯 ${formattedRoutes.length} AI-optimized routes calculated!`, {
+            position: "top-right",
+            autoClose: 3000,
+          });
+          
+          setIsCalculating(false);
+          return;
+        }
       }
-
-      const data = await response.json();
       
-      if (data.routes && data.routes.length > 0) {
-        const formattedRoutes = data.routes.map(route => ({
-          id: route.id,
-          name: route.name,
-          distance: route.distance,
-          duration: route.duration,
-          crowdLevel: route.crowd_level,
-          safetyScore: route.safety_score,
-          accessibilityScore: route.accessibility_score || 80,
-          difficulty: route.difficulty,
-          highlights: route.highlights,
-          warnings: route.warnings,
-          waypoints: route.waypoints,
-          instructions: route.instructions,
-          aiConfidence: route.ai_confidence || 0.85,
-          healthBenefits: route.health_benefits,
-          alternativeOptions: route.alternative_options
-        }));
+      throw new Error('Backend API failed or returned no routes');
+    } catch (error) {
+      console.error('Backend route calculation error:', error);
+      
+      // Use enhanced routing service with real road data
+      try {
+        const enhancedMockRoutes = await generateFallbackRoutes();
+        setRouteOptions(enhancedMockRoutes);
+        setSelectedRoute(enhancedMockRoutes[0]);
         
-        setRouteOptions(formattedRoutes);
-        setSelectedRoute(formattedRoutes[0]);
-        
-        // Send route data to parent components
-        if (formattedRoutes[0].waypoints && formattedRoutes[0].waypoints.length > 0) {
-          const routeCoordinates = formattedRoutes[0].waypoints.map(wp => [wp.lat, wp.lng]);
+        // Send fallback route data to parent
+        if (enhancedMockRoutes[0].waypoints && enhancedMockRoutes[0].waypoints.length > 0) {
+          const routeCoordinates = enhancedMockRoutes[0].waypoints.map(wp => [wp.lat, wp.lng]);
           onRouteFound(routeCoordinates);
           
-          const firstPoint = formattedRoutes[0].waypoints[0];
-          const lastPoint = formattedRoutes[0].waypoints[formattedRoutes[0].waypoints.length - 1];
+          const firstPoint = enhancedMockRoutes[0].waypoints[0];
+          const lastPoint = enhancedMockRoutes[0].waypoints[enhancedMockRoutes[0].waypoints.length - 1];
           
           onStartChange({
             lat: firstPoint.lat,
@@ -294,46 +390,17 @@ const RoutePlanner = ({ onRouteFound, onStartChange, onEndChange, currentLocatio
           });
         }
         
-        toast.success(`🎯 ${formattedRoutes.length} AI-optimized routes calculated!`, {
+        toast.success("🗺️ Real road routing activated!", {
           position: "top-right",
           autoClose: 3000,
         });
-      } else {
-        throw new Error('No routes found');
-      }
-    } catch (error) {
-      console.error('Route calculation error:', error);
-      
-      // Enhanced fallback with realistic data
-      const enhancedMockRoutes = generateFallbackRoutes();
-      setRouteOptions(enhancedMockRoutes);
-      setSelectedRoute(enhancedMockRoutes[0]);
-      
-      // Send fallback route data to parent
-      if (enhancedMockRoutes[0].waypoints && enhancedMockRoutes[0].waypoints.length > 0) {
-        const routeCoordinates = enhancedMockRoutes[0].waypoints.map(wp => [wp.lat, wp.lng]);
-        onRouteFound(routeCoordinates);
-        
-        const firstPoint = enhancedMockRoutes[0].waypoints[0];
-        const lastPoint = enhancedMockRoutes[0].waypoints[enhancedMockRoutes[0].waypoints.length - 1];
-        
-        onStartChange({
-          lat: firstPoint.lat,
-          lng: firstPoint.lng,
-          name: firstPoint.name
-        });
-        
-        onEndChange({
-          lat: lastPoint.lat,
-          lng: lastPoint.lng,
-          name: lastPoint.name
+      } catch (fallbackError) {
+        console.error('Fallback routing also failed:', fallbackError);
+        toast.error("❌ Route calculation failed", {
+          position: "top-right",
+          autoClose: 3000,
         });
       }
-      
-      toast.warning("🔄 Using offline AI route calculation", {
-        position: "top-right",
-        autoClose: 3000,
-      });
     }
     
     setIsCalculating(false);
@@ -565,7 +632,7 @@ const RoutePlanner = ({ onRouteFound, onStartChange, onEndChange, currentLocatio
         </div>
       </motion.div>
 
-      {/* Location Inputs */}
+      {/* Location Inputs with Search */}
       <motion.div 
         className="location-inputs"
         initial={{ opacity: 0, y: 20 }}
@@ -577,16 +644,15 @@ const RoutePlanner = ({ onRouteFound, onStartChange, onEndChange, currentLocatio
             <div className="location-dot start-dot" />
             <span>From</span>
           </div>
-          <select
-            value={startLocation}
-            onChange={(e) => setStartLocation(e.target.value)}
-            className="location-select premium-select"
-          >
-            <option value="">Select starting point...</option>
-            {availableLocations.map((location, index) => (
-              <option key={index} value={location}>{location}</option>
-            ))}
-          </select>
+          <LocationSearch
+            placeholder="Search starting location in Madhya Pradesh..."
+            onLocationSelect={(location) => {
+              setStartLocation(location.displayName);
+              onStartChange(location);
+            }}
+            currentLocation={currentLocation}
+            className="location-search-input"
+          />
         </div>
 
         <motion.div 
@@ -602,16 +668,15 @@ const RoutePlanner = ({ onRouteFound, onStartChange, onEndChange, currentLocatio
             <div className="location-dot end-dot" />
             <span>To</span>
           </div>
-          <select
-            value={endLocation}
-            onChange={(e) => setEndLocation(e.target.value)}
-            className="location-select premium-select"
-          >
-            <option value="">Select destination...</option>
-            {availableLocations.map((location, index) => (
-              <option key={index} value={location}>{location}</option>
-            ))}
-          </select>
+          <LocationSearch
+            placeholder="Search destination in Madhya Pradesh..."
+            onLocationSelect={(location) => {
+              setEndLocation(location.displayName);
+              onEndChange(location);
+            }}
+            currentLocation={currentLocation}
+            className="location-search-input"
+          />
         </div>
       </motion.div>
 

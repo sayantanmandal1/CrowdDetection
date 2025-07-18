@@ -10,6 +10,8 @@
     "axios": "^1.10.0",
     "framer-motion": "^11.18.2",
     "leaflet": "^1.9.4",
+    "leaflet-control-geocoder": "^3.2.0",
+    "leaflet-routing-machine": "^3.2.12",
     "lucide-react": "^0.460.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

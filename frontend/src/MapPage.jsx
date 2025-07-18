@@ -41,7 +41,7 @@ function MapPage() {
   // Current location state
   const [currentLocation, setCurrentLocation] = useState(null);
   const [route, setRoute] = useState(null);
-  const [startLoc, setStartLoc] = useState(null);
+  // const [startLoc, setStartLoc] = useState(null); // Removed unused variable
   const [endLoc, setEndLoc] = useState(null);
   const [showAccessible, setShowAccessible] = useState(false);
   const [showTransport, setShowTransport] = useState(false);
@@ -231,13 +231,13 @@ function MapPage() {
   };
 
   // Handle location updates from map interactions
-  const handleLocationUpdate = (location, type) => {
-    if (type === 'start') {
-      setStartLoc(location);
-    } else if (type === 'end') {
-      setEndLoc(location);
-    }
-  };
+  // const handleLocationUpdate = (location, type) => {
+  //   if (type === 'start') {
+  //     setStartLoc(location);
+  //   } else if (type === 'end') {
+  //     setEndLoc(location);
+  //   }
+  // };
 
   const renderActivePanel = () => {
     switch (activePanel) {
@@ -245,7 +245,7 @@ function MapPage() {
         return (
           <RoutePlanner 
             onRouteFound={setRoute} 
-            onStartChange={setStartLoc} 
+            onStartChange={(location) => console.log('Start location:', location)} 
             onEndChange={setEndLoc}
             currentLocation={currentLocation}
           />
@@ -260,7 +260,7 @@ function MapPage() {
         return (
           <RoutePlanner 
             onRouteFound={setRoute} 
-            onStartChange={setStartLoc} 
+            onStartChange={(location) => console.log('Start location:', location)} 
             onEndChange={setEndLoc}
             currentLocation={currentLocation}
           />
