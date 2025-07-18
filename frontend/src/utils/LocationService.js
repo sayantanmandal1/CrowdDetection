@@ -14,7 +14,7 @@ class LocationService {
       east: 82.75,
       west: 74.02
     };
-    
+
     // Default location in Ujjain
     this.DEFAULT_LOCATION = {
       lat: 23.1765,
@@ -36,7 +36,7 @@ class LocationService {
         navigator.geolocation.getCurrentPosition(
           (position) => {
             const { latitude, longitude, accuracy } = position.coords;
-            
+
             // Check if location is within Madhya Pradesh
             if (this.isInMadhyaPradesh(latitude, longitude)) {
               resolve({
@@ -82,9 +82,9 @@ class LocationService {
    */
   isInMadhyaPradesh(lat, lng) {
     return lat >= this.MP_BOUNDS.south &&
-           lat <= this.MP_BOUNDS.north &&
-           lng >= this.MP_BOUNDS.west &&
-           lng <= this.MP_BOUNDS.east;
+      lat <= this.MP_BOUNDS.north &&
+      lng >= this.MP_BOUNDS.west &&
+      lng <= this.MP_BOUNDS.east;
   }
 
   /**
@@ -93,7 +93,7 @@ class LocationService {
   async getLocationByName(locationName) {
     try {
       const results = await LocationSearchService.searchLocations(locationName, { limit: 1 });
-      
+
       if (results.length > 0) {
         const location = results[0];
         return {
@@ -209,11 +209,11 @@ class LocationService {
     const R = 6371; // Earth's radius in km
     const dLat = (point2.lat - point1.lat) * Math.PI / 180;
     const dLng = (point2.lng - point1.lng) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(point1.lat * Math.PI / 180) * Math.cos(point2.lat * Math.PI / 180) * 
-      Math.sin(dLng/2) * Math.sin(dLng/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(point1.lat * Math.PI / 180) * Math.cos(point2.lat * Math.PI / 180) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   }
 

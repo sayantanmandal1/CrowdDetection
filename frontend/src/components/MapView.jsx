@@ -3,7 +3,8 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents 
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import notificationManager from '../utils/NotificationManager';
-import locationService from '../utils/LocationService';
+import RoutingService from '../utils/RoutingService';
+import LocationSearchService from '../utils/LocationSearchService';
 
 // Fix for default markers
 delete L.Icon.Default.prototype._getIconUrl;
@@ -94,62 +95,152 @@ const DraggableMarker = ({ position, setPosition, icon, popupContent, onDragEnd 
   );
 };
 
-// Enhanced Location finder component using LocationService
+// Global location state to prevent multiple initializations
+let globalLocationInitialized = false;
+let globalLocationData = null;
+
+// Completely fixed LocationFinder component - NO SPAM ALERTS
 const LocationFinder = ({ setCurrentLocation, onLocationFound }) => {
   const map = useMap();
-  const [isLocationSet, setIsLocationSet] = useState(false);
+  const hasInitialized = useRef(false);
 
   useEffect(() => {
-    const initializeLocation = async () => {
+    // Absolute prevention of multiple calls
+    if (hasInitialized.current || globalLocationInitialized) {
+      // If already initialized, just use the existing location
+      if (globalLocationData) {
+        setCurrentLocation(globalLocationData);
+        map.setView([globalLocationData.lat, globalLocationData.lng], globalLocationData.isGPS ? 16 : 13);
+        if (onLocationFound) {
+          onLocationFound(globalLocationData);
+        }
+      }
+      return;
+    }
+
+    hasInitialized.current = true;
+    globalLocationInitialized = true;
+
+    const initializeLocationOnce = async () => {
       try {
-        const location = await locationService.getCurrentLocation();
+        // Check if geolocation is available
+        if (!navigator.geolocation) {
+          throw new Error('Geolocation not supported');
+        }
+
+        // Get current position with timeout - ONLY ONCE
+        const position = await new Promise((resolve, reject) => {
+          const timeoutId = setTimeout(() => {
+            reject(new Error('Geolocation timeout'));
+          }, 8000);
+
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              clearTimeout(timeoutId);
+              resolve(pos);
+            },
+            (err) => {
+              clearTimeout(timeoutId);
+              reject(err);
+            },
+            {
+              enableHighAccuracy: false, // Faster response
+              timeout: 8000,
+              maximumAge: 600000 // 10 minutes cache
+            }
+          );
+        });
+
+        const { latitude, longitude, accuracy } = position.coords;
         
-        setCurrentLocation(location);
-        if (!isLocationSet) {
-          map.setView([location.lat, location.lng], location.isGPS ? 16 : 13);
-          setIsLocationSet(true);
+        // Check if user is in Madhya Pradesh bounds
+        const mpBounds = {
+          north: 26.87, south: 21.08, east: 82.75, west: 74.02
+        };
+        
+        const isInMP = latitude >= mpBounds.south && latitude <= mpBounds.north &&
+                      longitude >= mpBounds.west && longitude <= mpBounds.east;
+        
+        let location;
+        
+        if (isInMP) {
+          // User is in Madhya Pradesh, use actual location
+          location = { 
+            lat: latitude, 
+            lng: longitude, 
+            accuracy: accuracy,
+            name: "Your Location in Madhya Pradesh",
+            isGPS: true,
+            inMP: true
+          };
           
+          // Show success notification ONLY ONCE
           notificationManager.show(
-            'location-initialized',
-            `📍 ${location.name}`, 
-            { type: location.isGPS ? 'success' : 'info', autoClose: 3000 }
+            'location-found-mp-final',
+            `📍 GPS Location Set (±${Math.round(accuracy)}m)`, 
+            { type: 'success', autoClose: 2500 }
+          );
+        } else {
+          // User is outside MP, use random Ujjain location
+          location = LocationSearchService.getRandomUjjainLocation();
+          location.isGPS = false;
+          location.inMP = true;
+          
+          // Show info notification ONLY ONCE
+          notificationManager.show(
+            'location-ujjain-final',
+            `📍 ${location.name} - Simhastha 2028 Ready!`, 
+            { type: 'info', autoClose: 2500 }
           );
         }
         
-        if (onLocationFound) onLocationFound(location);
+        // Store globally to prevent re-initialization
+        globalLocationData = location;
+        
+        // Set location and update map view
+        setCurrentLocation(location);
+        map.setView([location.lat, location.lng], location.isGPS ? 15 : 13);
+        
+        if (onLocationFound) {
+          onLocationFound(location);
+        }
+        
       } catch (error) {
-        console.error('Location initialization error:', error);
+        console.warn('Geolocation failed:', error.message);
         
-        // Final fallback to Ujjain
-        const ujjainDefault = { 
-          lat: 23.1765, 
-          lng: 75.7885, 
-          accuracy: 10, 
-          name: "Ujjain (Default)", 
-          isGPS: false, 
-          inMP: true 
-        };
+        // Use random Ujjain location as fallback
+        const ujjainLocation = LocationSearchService.getRandomUjjainLocation();
+        ujjainLocation.isGPS = false;
+        ujjainLocation.inMP = true;
+        ujjainLocation.name = ujjainLocation.name || "Ujjain Demo Location";
         
-        setCurrentLocation(ujjainDefault);
-        map.setView([ujjainDefault.lat, ujjainDefault.lng], 13);
+        // Store globally
+        globalLocationData = ujjainLocation;
         
+        setCurrentLocation(ujjainLocation);
+        map.setView([ujjainLocation.lat, ujjainLocation.lng], 13);
+        
+        // Show fallback notification ONLY ONCE
         notificationManager.show(
-          'location-fallback',
-          "📍 Using default location in Ujjain", 
-          { type: 'warning', autoClose: 3000 }
+          'location-demo-final',
+          `📍 ${ujjainLocation.name} - Demo Mode`, 
+          { type: 'info', autoClose: 2500 }
         );
         
-        if (onLocationFound) onLocationFound(ujjainDefault);
+        if (onLocationFound) {
+          onLocationFound(ujjainLocation);
+        }
       }
     };
 
-    initializeLocation();
-  }, [map, setCurrentLocation, onLocationFound, isLocationSet]);
+    // Execute initialization
+    initializeLocationOnce();
+  }, []); // Completely empty dependency array
 
   return null;
 };
 
-// Map click handler
+// Map click handler with controlled notifications
 const MapClickHandler = ({ onMapClick, isSelectingDestination }) => {
   useMapEvents({
     click: (e) => {
@@ -183,20 +274,19 @@ const MapView = ({
   const [transportHubs, setTransportHubs] = useState([]);
   const [alertPoints, setAlertPoints] = useState([]);
 
-  // Handle current location updates with notification management
+  // Handle current location updates - prevent callback loops
   const handleLocationFound = useCallback((location) => {
-    setCurrentLocation(location);
-    if (onCurrentLocationSet) {
+    if (onCurrentLocationSet && location) {
       onCurrentLocationSet({
         lat: location.lat,
         lng: location.lng,
-        name: "My Current Location",
+        name: location.name || "Current Location",
         accuracy: location.accuracy
       });
     }
-  }, [onCurrentLocationSet, setCurrentLocation]);
+  }, [onCurrentLocationSet]);
 
-  // Enable destination selection mode with notification management
+  // Enable destination selection mode
   const enableDestinationSelection = useCallback(() => {
     setIsSelectingDestination(true);
     notificationManager.show(
@@ -222,104 +312,37 @@ const MapView = ({
     }
   }, [isSelectingDestination, setDestination, onDestinationSet]);
 
-  // Load real data from LocationService and APIs
+  // Load demo data only once
   useEffect(() => {
     const loadMapData = async () => {
       try {
-        // Get nearby locations for crowd data
-        if (currentLocation) {
-          const nearbyLocations = await locationService.getNearbyPlaces(
-            currentLocation.lat, 
-            currentLocation.lng, 
-            50 // 50km radius
-          );
-          
-          // Convert to crowd data format
-          const crowdDataFromLocations = nearbyLocations
-            .filter(loc => ['temple', 'ghat', 'tourist'].includes(loc.type))
-            .slice(0, 10)
-            .map((loc, index) => ({
-              id: index + 1,
-              lat: loc.lat,
-              lng: loc.lng,
-              intensity: Math.random() * 0.8 + 0.2, // Random intensity between 0.2-1.0
-              name: loc.name,
-              status: Math.random() > 0.7 ? "Critical" : Math.random() > 0.4 ? "High" : "Moderate",
-              type: loc.type,
-              district: loc.district
-            }));
-          
-          setCrowdData(crowdDataFromLocations);
-          
-          // Transport hubs from location service
-          const transportLocations = nearbyLocations
-            .filter(loc => ['transport', 'airport'].includes(loc.type))
-            .slice(0, 5)
-            .map((loc, index) => ({
-              id: index + 1,
-              lat: loc.lat,
-              lng: loc.lng,
-              type: loc.name,
-              capacity: Math.floor(Math.random() * 2000) + 1000,
-              current: Math.floor(Math.random() * 1500) + 500,
-              services: loc.type === 'airport' ? ['Flights', 'Taxi', 'Bus'] : ['Bus', 'Taxi', 'Auto'],
-              district: loc.district
-            }));
-          
-          setTransportHubs(transportLocations);
-        }
-        
-        // Try to fetch real-time alerts from backend
-        try {
-          const alertsResponse = await fetch('http://localhost:8000/alerts/current');
-          if (alertsResponse.ok) {
-            const alertsData = await alertsResponse.json();
-            const formattedAlerts = alertsData.alerts?.map((alert, index) => ({
-              id: index + 1,
-              lat: alert.coordinates?.lat || (23.1765 + (Math.random() - 0.5) * 0.1),
-              lng: alert.coordinates?.lng || (75.7885 + (Math.random() - 0.5) * 0.1),
-              type: alert.severity === 'critical' ? 'error' : alert.severity === 'warning' ? 'warning' : 'info',
-              message: alert.message,
-              timestamp: alert.timestamp
-            })) || [];
-            
-            setAlertPoints(formattedAlerts);
-          } else {
-            throw new Error('API not available');
-          }
-        } catch (error) {
-          // Fallback alert data
-          setAlertPoints([
-            { id: 1, lat: 23.1790, lng: 75.7890, type: "warning", message: "High Crowd Density Detected" },
-            { id: 2, lat: 23.1740, lng: 75.7860, type: "info", message: "Medical Team Deployed" },
-            { id: 3, lat: 23.1820, lng: 75.7920, type: "success", message: "Route Optimization Active" },
-          ]);
-        }
-        
-      } catch (error) {
-        console.error('Error loading map data:', error);
-        
-        // Fallback to demo data
+        // Demo crowd data
         setCrowdData([
           { id: 1, lat: 23.1765, lng: 75.7885, intensity: 0.85, name: "Ram Ghat Main", status: "Critical" },
           { id: 2, lat: 23.1828, lng: 75.7681, intensity: 0.78, name: "Mahakaleshwar Temple", status: "High" },
           { id: 3, lat: 23.1801, lng: 75.7892, intensity: 0.45, name: "Shipra Ghat Alpha", status: "Moderate" },
         ]);
         
+        // Demo transport hubs
         setTransportHubs([
           { id: 1, lat: 23.1723, lng: 75.7823, type: "Central Hub", capacity: 3000, current: 1800 },
           { id: 2, lat: 23.1856, lng: 75.7934, type: "East Terminal", capacity: 2500, current: 1200 },
         ]);
         
+        // Demo alerts
         setAlertPoints([
           { id: 1, lat: 23.1790, lng: 75.7890, type: "warning", message: "High Crowd Density" },
           { id: 2, lat: 23.1740, lng: 75.7860, type: "info", message: "Medical Team Deployed" },
         ]);
+        
+      } catch (error) {
+        console.error('Error loading map data:', error);
       }
     };
     
+    // Load data only once when component mounts
     loadMapData();
-  }, [currentLocation]);
+  }, []); // Empty dependency array
 
   // Create icons
   const currentLocationIcon = createCustomIcon('#4285f4', '📍', 35, true);
@@ -365,16 +388,17 @@ const MapView = ({
         {currentLocation && (
           <DraggableMarker
             position={[currentLocation.lat, currentLocation.lng]}
-            setPosition={(pos) => setCurrentLocation({ lat: pos.lat, lng: pos.lng })}
+            setPosition={(pos) => setCurrentLocation({ ...currentLocation, lat: pos.lat, lng: pos.lng })}
             icon={currentLocationIcon}
             popupContent={
               <div>
-                <h4>📍 Current Location</h4>
+                <h4>📍 {currentLocation.name || 'Current Location'}</h4>
                 <p>Lat: {currentLocation.lat.toFixed(6)}</p>
                 <p>Lng: {currentLocation.lng.toFixed(6)}</p>
                 {currentLocation.accuracy && (
                   <p>Accuracy: ±{Math.round(currentLocation.accuracy)}m</p>
                 )}
+                {currentLocation.isGPS && <p>🛰️ GPS Location</p>}
               </div>
             }
           />
@@ -384,7 +408,7 @@ const MapView = ({
         {destination && (
           <DraggableMarker
             position={[destination.lat, destination.lng]}
-            setPosition={(pos) => setDestination({ lat: pos.lat, lng: pos.lng })}
+            setPosition={(pos) => setDestination({ ...destination, lat: pos.lat, lng: pos.lng })}
             icon={destinationIcon}
             popupContent={
               <div>
@@ -470,7 +494,6 @@ const MapView = ({
           className="control-btn"
           onClick={() => {
             if (currentLocation) {
-              // Re-center map on current location
               notificationManager.show(
                 'recenter-map',
                 "📍 Map centered on current location", 
