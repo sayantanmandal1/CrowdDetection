@@ -235,7 +235,8 @@ const LocationFinder = ({ setCurrentLocation, onLocationFound }) => {
 
     // Execute initialization
     initializeLocationOnce();
-  }, []); // Completely empty dependency array
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Intentionally empty - we want this to run only once on mount
 
   return null;
 };

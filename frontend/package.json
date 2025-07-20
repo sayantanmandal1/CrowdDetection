@@ -50,5 +50,8 @@
   "resolutions": {
     "react": "19.1.0",
     "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.20"
   }
 }
