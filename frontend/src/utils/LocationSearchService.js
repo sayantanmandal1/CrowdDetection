@@ -131,7 +131,9 @@ class LocationSearchService {
       )
       .map(place => ({
         name: place.name,
-        display_name: `${place.name}, Madhya Pradesh, India`,
+        displayName: `${place.name}, Madhya Pradesh, India`,
+        fullName: `${place.name}, Madhya Pradesh, India`,
+        district: this.getDistrictFromName(place.name),
         lat: place.lat,
         lng: place.lng,
         type: place.type,
@@ -172,7 +174,9 @@ class LocationSearchService {
       
       return data.map(item => ({
         name: item.name || item.display_name.split(',')[0],
-        display_name: item.display_name,
+        displayName: item.display_name,
+        fullName: item.display_name,
+        district: item.address?.state_district || item.address?.county || 'Unknown',
         lat: parseFloat(item.lat),
         lng: parseFloat(item.lon),
         type: this.categorizePlace(item),
@@ -238,7 +242,9 @@ class LocationSearchService {
       .slice(0, limit)
       .map(place => ({
         name: place.name,
-        display_name: `${place.name}, Madhya Pradesh, India`,
+        displayName: `${place.name}, Madhya Pradesh, India`,
+        fullName: `${place.name}, Madhya Pradesh, India`,
+        district: this.getDistrictFromName(place.name),
         lat: place.lat,
         lng: place.lng,
         type: place.type,
@@ -279,6 +285,55 @@ class LocationSearchService {
     if (category === 'historic') return 'heritage';
     
     return 'general';
+  }
+
+  /**
+   * Get district name from place name
+   */
+  getDistrictFromName(placeName) {
+    const districtMap = {
+      'Bhopal': 'Bhopal',
+      'Indore': 'Indore',
+      'Gwalior': 'Gwalior',
+      'Jabalpur': 'Jabalpur',
+      'Ujjain': 'Ujjain',
+      'Sagar': 'Sagar',
+      'Dewas': 'Dewas',
+      'Satna': 'Satna',
+      'Ratlam': 'Ratlam',
+      'Rewa': 'Rewa',
+      'Murwara': 'Katni',
+      'Singrauli': 'Singrauli',
+      'Burhanpur': 'Burhanpur',
+      'Khandwa': 'Khandwa',
+      'Bhind': 'Bhind',
+      'Chhindwara': 'Chhindwara',
+      'Guna': 'Guna',
+      'Shivpuri': 'Shivpuri',
+      'Vidisha': 'Vidisha',
+      'Chhatarpur': 'Chhatarpur',
+      'Khajuraho': 'Chhatarpur',
+      'Omkareshwar': 'Khandwa',
+      'Maheshwar': 'Khargone',
+      'Chitrakoot': 'Satna',
+      'Amarkantak': 'Anuppur',
+      'Orchha': 'Tikamgarh',
+      'Sanchi': 'Raisen',
+      'Pachmarhi': 'Hoshangabad',
+      'Bandhavgarh': 'Umaria',
+      'Kanha': 'Mandla',
+      'Pench': 'Seoni',
+      'Bhedaghat': 'Jabalpur'
+    };
+    
+    // Check if place name contains any district name
+    for (const [place, district] of Object.entries(districtMap)) {
+      if (placeName.toLowerCase().includes(place.toLowerCase())) {
+        return district;
+      }
+    }
+    
+    return 'Madhya Pradesh';
   }
 
   /**
@@ -456,6 +511,36 @@ class LocationSearchService {
       name: 'Ujjain, Madhya Pradesh',
       inMP: true,
       isDefault: true
+    };
+  }
+
+  /**
+   * Get random location in Ujjain for default
+   */
+  getRandomUjjainLocation() {
+    const ujjainLocations = [
+      { name: 'Mahakaleshwar Temple', lat: 23.1828, lng: 75.7681 },
+      { name: 'Ram Ghat', lat: 23.1765, lng: 75.7885 },
+      { name: 'Ujjain Junction', lat: 23.1906, lng: 75.7837 },
+      { name: 'Vikram University', lat: 23.1815, lng: 75.7849 },
+      { name: 'Kaliadeh Palace', lat: 23.1654, lng: 75.7842 },
+      { name: 'Chintaman Ganesh Temple', lat: 23.1889, lng: 75.7654 },
+      { name: 'Sandipani Ashram', lat: 23.1723, lng: 75.7923 },
+      { name: 'Harsiddhi Temple', lat: 23.1798, lng: 75.7698 },
+      { name: 'Mangalnath Temple', lat: 23.1567, lng: 75.7823 },
+      { name: 'Kal Bhairav Temple', lat: 23.1889, lng: 75.7794 }
+    ];
+    
+    const randomLocation = ujjainLocations[Math.floor(Math.random() * ujjainLocations.length)];
+    
+    // Add small random offset to make it more realistic
+    return {
+      lat: randomLocation.lat + (Math.random() - 0.5) * 0.005,
+      lng: randomLocation.lng + (Math.random() - 0.5) * 0.005,
+      name: randomLocation.name,
+      accuracy: 10,
+      isGPS: false,
+      inMP: true
     };
   }
 }

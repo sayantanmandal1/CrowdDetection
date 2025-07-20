@@ -19,8 +19,13 @@ const LocationSearch = ({
   useEffect(() => {
     // Load popular destinations on mount
     const loadPopularLocations = async () => {
-      const popular = await LocationSearchService.searchLocations('', { limit: 15 });
-      setPopularLocations(popular);
+      try {
+        const popular = await LocationSearchService.searchLocations('', { limit: 15 });
+        setPopularLocations(popular || []);
+      } catch (error) {
+        console.error('Error loading popular locations:', error);
+        setPopularLocations([]);
+      }
     };
     loadPopularLocations();
   }, []);
@@ -35,7 +40,8 @@ const LocationSearch = ({
             limit: 15, 
             nearLocation: currentLocation 
           });
-          setResults(searchResults);
+          // Ensure searchResults is always an array
+          setResults(Array.isArray(searchResults) ? searchResults : []);
           setIsOpen(true);
         } catch (error) {
           console.error('Search error:', error);
@@ -64,16 +70,17 @@ const LocationSearch = ({
   }, []);
 
   const handleLocationSelect = (location) => {
-    setQuery(location.displayName);
+    const displayName = location.displayName || location.name || 'Unknown Location';
+    setQuery(displayName);
     setIsOpen(false);
     if (onLocationSelect) {
       onLocationSelect({
         lat: location.lat,
         lng: location.lng,
-        name: location.displayName,
-        fullName: location.fullName,
-        type: location.type,
-        district: location.district
+        name: displayName,
+        fullName: location.fullName || location.name || displayName,
+        type: location.type || 'location',
+        district: location.district || 'Unknown'
       });
     }
   };
@@ -127,8 +134,8 @@ const LocationSearch = ({
         <Search className="search-icon" size={20} />
         <input
           type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          value={query || ''}
+          onChange={(e) => setQuery(e.target.value || '')}
           onFocus={() => {
             if (results.length > 0 || query.length === 0) {
               setIsOpen(true);
@@ -231,7 +238,7 @@ const LocationSearch = ({
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .location-search {
           position: relative;
           width: 100%;

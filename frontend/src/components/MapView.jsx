@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents 
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import notificationManager from '../utils/NotificationManager';
-import RoutingService from '../utils/RoutingService';
+// import RoutingService from '../utils/RoutingService'; // Removed unused import
 import LocationSearchService from '../utils/LocationSearchService';
 
 // Fix for default markers
@@ -557,7 +557,7 @@ const MapView = ({
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .map-container {
           position: relative;
           height: 100%;
