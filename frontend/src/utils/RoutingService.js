@@ -5,13 +5,14 @@
 
 class RoutingService {
   constructor() {
-    // OpenRouteService API key (free tier allows 2000 requests/day)
-    this.ORS_API_KEY = '5b3ce3597851110001cf6248a707b5b7b8b84b7b8b8b4b7b8b8b4b7b';
-    this.ORS_BASE_URL = 'https://api.openrouteservice.org/v2';
-    
-    // Backup routing services
+    // Free routing services (no API key required)
     this.OSRM_BASE_URL = 'https://router.project-osrm.org';
-    this.GRAPHHOPPER_API_KEY = 'your-graphhopper-key'; // Optional
+    this.GRAPHHOPPER_BASE_URL = 'https://graphhopper.com/api/1';
+    
+    // Madhya Pradesh bounds for local routing
+    this.MP_BOUNDS = {
+      north: 26.87, south: 21.08, east: 82.75, west: 74.02
+    };
   }
 
   /**
@@ -23,15 +24,11 @@ class RoutingService {
     } = options;
 
     try {
-      // Try OpenRouteService first (most accurate for India)
-      const route = await this.getOpenRouteServiceRoute(startCoords, endCoords, profile, options);
-      if (route) return route;
-
-      // Fallback to OSRM
+      // Use OSRM (free and reliable)
       const osrmRoute = await this.getOSRMRoute(startCoords, endCoords, profile);
       if (osrmRoute) return osrmRoute;
 
-      // Final fallback to straight line with waypoints
+      // Fallback to enhanced route with realistic waypoints
       return this.generateFallbackRoute(startCoords, endCoords, options);
     } catch (error) {
       console.error('Routing error:', error);
@@ -39,51 +36,7 @@ class RoutingService {
     }
   }
 
-  /**
-   * OpenRouteService routing (best for India)
-   */
-  async getOpenRouteServiceRoute(start, end, profile, options) {
-    try {
-      const coordinates = [[start.lng, start.lat], [end.lng, end.lat]];
-      
-      const requestBody = {
-        coordinates,
-        format: 'geojson',
-        instructions: true,
-        elevation: false,
-        extra_info: ['steepness', 'surface', 'waytype'],
-        options: {
-          avoid_features: options.avoidCrowds ? ['steps'] : [],
-          profile_params: {
-            restrictions: options.accessibleRoute ? {
-              maximum_grade: 6,
-              surface_type: 'paved'
-            } : {}
-          }
-        }
-      };
 
-      const response = await fetch(`${this.ORS_BASE_URL}/directions/${profile}/geojson`, {
-        method: 'POST',
-        headers: {
-          'Authorization': this.ORS_API_KEY,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        throw new Error(`ORS API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return this.formatOpenRouteServiceResponse(data, options);
-    } catch (error) {
-      console.error('OpenRouteService error:', error);
-      return null;
-    }
-  }
 
   /**
    * OSRM routing (backup)
@@ -110,43 +63,7 @@ class RoutingService {
     }
   }
 
-  /**
-   * Format OpenRouteService response
-   */
-  formatOpenRouteServiceResponse(data, options) {
-    const route = data.features[0];
-    const properties = route.properties;
-    const segments = properties.segments[0];
-    
-    // Convert coordinates to lat/lng format
-    const coordinates = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
-    
-    // Extract turn-by-turn instructions
-    const instructions = segments.steps.map(step => ({
-      instruction: step.instruction,
-      distance: step.distance,
-      duration: step.duration,
-      way_points: step.way_points
-    }));
 
-    // Calculate additional metrics
-    const distance = (properties.summary.distance / 1000).toFixed(2); // km
-    const duration = Math.round(properties.summary.duration / 60); // minutes
-    
-    return {
-      coordinates,
-      distance: `${distance} km`,
-      duration: `${duration} min`,
-      instructions,
-      elevation: segments.elevation || [],
-      surface_info: segments.extras?.surface || [],
-      way_type: segments.extras?.waytype || [],
-      difficulty: this.calculateDifficulty(segments, options),
-      crowdLevel: this.estimateCrowdLevel(coordinates, options),
-      safetyScore: this.calculateSafetyScore(segments, options),
-      accessibilityScore: this.calculateAccessibilityScore(segments, options)
-    };
-  }
 
   /**
    * Format OSRM response
