@@ -83,52 +83,86 @@ class LocationSearchService {
   }
 
   /**
-   * Search for locations in Madhya Pradesh
+   * Search for locations in Madhya Pradesh - Google Maps style
    */
   async searchLocations(query, options = {}) {
     const { limit = 10 } = options;
     
-    if (!query || query.length < 2) {
+    if (!query || query.length < 1) {
       return this.getPopularPlaces(limit);
     }
 
     try {
-      // First try local database search
-      const localResults = this.searchLocalDatabase(query, limit);
+      // Always search local database first (more reliable)
+      const localResults = this.searchLocalDatabase(query, limit * 2);
       
-      // Then try Nominatim API
+      // If we have good local results, return them
+      if (localResults.length >= 3) {
+        return localResults.slice(0, limit);
+      }
+      
+      // Try Nominatim API for additional results
       const nominatimResults = await this.searchNominatim(query, limit);
       
-      // Combine and deduplicate results
-      const combinedResults = this.combineAndDeduplicateResults(
-        localResults, 
-        nominatimResults
-      );
-      
-      // Filter to Madhya Pradesh bounds
-      const filteredResults = this.filterToMadhyaPradesh(combinedResults);
-      
-      // Sort by relevance
-      const sortedResults = this.sortByRelevance(filteredResults, query);
+      // Combine all results
+      const combinedResults = this.combineAndDeduplicateResults(localResults, nominatimResults);
+      const mpResults = this.filterToMadhyaPradesh(combinedResults);
+      const sortedResults = this.sortByRelevance(mpResults, query);
       
       return sortedResults.slice(0, limit);
     } catch (error) {
       console.error('Location search error:', error);
+      // Always return local results as fallback
       return this.searchLocalDatabase(query, limit);
     }
   }
 
   /**
-   * Search local database of MP places
+   * Search local database of MP places - Enhanced fuzzy search
    */
   searchLocalDatabase(query, limit) {
-    const queryLower = query.toLowerCase();
+    const queryLower = query.toLowerCase().trim();
     
-    return this.MP_MAJOR_PLACES
-      .filter(place => 
-        place.name.toLowerCase().includes(queryLower) ||
-        place.type.toLowerCase().includes(queryLower)
-      )
+    // If query is empty, return popular places
+    if (!queryLower) {
+      return this.getPopularPlaces(limit);
+    }
+    
+    // Enhanced search with multiple matching strategies
+    const results = this.MP_MAJOR_PLACES
+      .map(place => {
+        const nameLower = place.name.toLowerCase();
+        let score = 0;
+        
+        // Exact match gets highest score
+        if (nameLower === queryLower) score += 100;
+        
+        // Starts with query gets high score
+        if (nameLower.startsWith(queryLower)) score += 50;
+        
+        // Contains query gets medium score
+        if (nameLower.includes(queryLower)) score += 25;
+        
+        // Word boundary matches get bonus
+        const words = queryLower.split(' ');
+        words.forEach(word => {
+          if (word.length > 2 && nameLower.includes(word)) {
+            score += 10;
+          }
+        });
+        
+        // Type matching
+        if (place.type.toLowerCase().includes(queryLower)) score += 15;
+        
+        // District matching
+        const district = this.getDistrictFromName(place.name).toLowerCase();
+        if (district.includes(queryLower)) score += 20;
+        
+        return { ...place, score };
+      })
+      .filter(place => place.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
       .map(place => ({
         name: place.name,
         displayName: `${place.name}, Madhya Pradesh, India`,
@@ -139,8 +173,9 @@ class LocationSearchService {
         type: place.type,
         importance: this.getPlaceImportance(place.type),
         source: 'local'
-      }))
-      .slice(0, limit);
+      }));
+    
+    return results;
   }
 
   /**
